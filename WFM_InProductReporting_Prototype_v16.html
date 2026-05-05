@@ -1,0 +1,2431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WFM — In-Product Reporting Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; }
+    .nav-item { transition: all 0.15s; cursor: pointer; }
+    .nav-item:hover { background: #1e3a5f; }
+    .nav-item.active { background: #0f52a0; border-left: 3px solid #38bdf8; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .badge-p0 { background:#dc2626; color:#fff; font-size:10px; padding:1px 5px; border-radius:4px; }
+    .badge-p1 { background:#d97706; color:#fff; font-size:10px; padding:1px 5px; border-radius:4px; }
+    .chip { display:inline-block; background:#e0f2fe; color:#0369a1; border-radius:12px; padding:3px 10px; font-size:12px; cursor:pointer; margin:2px; }
+    .chip:hover { background:#bae6fd; }
+    .ai-bubble-user { background:#0f52a0; color:#fff; border-radius:12px 12px 2px 12px; padding:10px 14px; max-width:70%; margin-left:auto; }
+    .ai-bubble-ai { background:#fff; border:1px solid #e2e8f0; border-radius:2px 12px 12px 12px; padding:12px 16px; max-width:80%; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+    .alert-critical { border-left: 4px solid #dc2626; }
+    .alert-warning  { border-left: 4px solid #d97706; }
+    .alert-info     { border-left: 4px solid #2563eb; }
+    .gap-red    { background:#fef2f2; color:#dc2626; }
+    .gap-yellow { background:#fffbeb; color:#92400e; }
+    .gap-green  { background:#f0fdf4; color:#166534; }
+    canvas { max-height: 300px; }
+    .scrollable-table { overflow-x: auto; }
+    .kpi-card { background:#fff; border-radius:8px; padding:16px; border:1px solid #e2e8f0; }
+    .status-progress { background:#fef3c7; color:#92400e; }
+    #ai-input:focus { outline:none; box-shadow: 0 0 0 2px #38bdf8; }
+    .typing-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#94a3b8; animation: blink 1.2s infinite; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+    .toggle-btn { padding:5px 14px; border-radius:6px; font-size:13px; cursor:pointer; border:1px solid #cbd5e1; background:#fff; color:#475569; transition:all 0.15s; }
+    .toggle-btn.active { background:#0f52a0; color:#fff; border-color:#0f52a0; }
+    .expand-btn { cursor:pointer; user-select:none; color:#94a3b8; font-size:11px; margin-left:4px; }
+    .filter-section { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; margin-bottom:16px; }
+    .filter-label { font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px; }
+    select.filter-select, input.filter-select { border:1px solid #cbd5e1; border-radius:6px; padding:5px 10px; font-size:13px; color:#334155; background:#fff; }
+    .sch-flag-over  { background:#fef2f2; color:#dc2626; }
+    .sch-flag-under { background:#fff7ed; color:#c2410c; }
+    .sch-flag-ok    { background:#f0fdf4; color:#166534; }
+    .waterfall-bar  { transition: width 0.4s ease; }
+    .indent-partner { padding-left:2rem; font-style:italic; color:#64748b; font-size:12px; }
+    /* Audit trail styles */
+    .audit-action-add    { background:#dcfce7; color:#166534; }
+    .audit-action-edit   { background:#dbeafe; color:#1e40af; }
+    .audit-action-remove { background:#fee2e2; color:#991b1b; }
+    .audit-timeline-line { position:absolute; left:19px; top:0; bottom:0; width:2px; background:#e2e8f0; z-index:0; }
+    .audit-dot-add    { background:#16a34a; }
+    .audit-dot-edit   { background:#2563eb; }
+    .audit-dot-remove { background:#dc2626; }
+    .wg-audit-bar { height:8px; border-radius:4px; }
+    /* Threshold config panel */
+    .threshold-panel { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 16px; margin-bottom:12px; }
+    .threshold-input { width:64px; border:1px solid #cbd5e1; border-radius:6px; padding:4px 8px; font-size:13px; color:#334155; text-align:center; }
+    .threshold-input:focus { outline:none; box-shadow:0 0 0 2px #38bdf8; }
+    /* Summary breach chips */
+    .breach-chip { display:inline-flex; align-items:center; gap:6px; border-radius:8px; padding:6px 12px; font-size:13px; font-weight:600; cursor:pointer; border:2px solid transparent; transition:all 0.15s; user-select:none; }
+    .breach-chip:hover { filter:brightness(0.95); }
+    .breach-chip.active { border-color: currentColor; }
+    .breach-chip-over   { background:#fef2f2; color:#dc2626; }
+    .breach-chip-under  { background:#fff7ed; color:#c2410c; }
+    .breach-chip-crit   { background:#fef2f2; color:#991b1b; }
+    .breach-chip-gap    { background:#fffbeb; color:#92400e; }
+    .breach-chip-ok     { background:#f0fdf4; color:#166534; }
+    /* Drill-down drawer */
+    .drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:40; display:none; }
+    .drawer-overlay.open { display:block; }
+    .drawer-panel { position:fixed; right:0; top:0; bottom:0; width:520px; background:#fff; z-index:50; box-shadow:-4px 0 24px rgba(0,0,0,0.12); transform:translateX(100%); transition:transform 0.25s ease; display:flex; flex-direction:column; }
+    .drawer-panel.open { transform:translateX(0); }
+    .drill-row-over  { border-left:3px solid #dc2626; }
+    .drill-row-under { border-left:3px solid #c2410c; }
+    .drill-row-crit  { border-left:3px solid #991b1b; }
+    .drill-row-gap   { border-left:3px solid #d97706; }
+  </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+<!-- SIDEBAR -->
+<div class="w-64 flex-shrink-0 bg-[#0d2240] text-white flex flex-col" style="min-height:100vh">
+  <div class="px-4 py-4 border-b border-[#1e3a5f]">
+    <div class="text-xs font-bold uppercase tracking-widest text-blue-300 mb-1">WFM</div>
+    <div class="text-lg font-bold leading-tight">In-Product Reporting</div>
+    <div class="text-xs text-slate-400 mt-1">Prototype · Apr 2026</div>
+  </div>
+  <nav class="flex-1 py-3 overflow-y-auto">
+
+    <div class="px-3 mb-1 text-xs uppercase tracking-wider text-slate-500 font-semibold">AI Engine</div>
+    <div class="nav-item active px-3 py-2 text-sm flex items-center gap-2" onclick="showView('ai-engine')">
+      <span>🤖</span><span class="flex-1">AI Observability</span><span class="badge-p1">P1</span>
+    </div>
+    <div class="nav-item px-3 py-2 text-sm flex items-center gap-2" onclick="showView('alerts')">
+      <span>🔔</span><span class="flex-1">Proactive Alerts</span><span class="badge-p1">P1</span><span class="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 ml-1">4</span>
+    </div>
+
+    <div class="px-3 mt-4 mb-1 text-xs uppercase tracking-wider text-slate-500 font-semibold">Staffing</div>
+    <div class="nav-item px-3 py-2 text-sm flex items-center gap-2" onclick="showView('act-req-sch')">
+      <span>📊</span><span class="flex-1">Actual vs REQ vs SCH</span><span class="badge-p0">P0</span>
+    </div>
+    <div class="nav-item px-3 py-2 text-sm flex items-center gap-2" onclick="showView('occ-util-shr')">
+      <span>📉</span><span class="flex-1">OCC / UTIL / SHR</span><span class="badge-p0">P0</span>
+    </div>
+    <div class="nav-item px-3 py-2 text-sm flex items-center gap-2" onclick="showView('staffing-adj')">
+      <span>🔍</span><span class="flex-1">Staffing Adjustments</span><span class="badge-p0">P0</span>
+    </div>
+
+    <div class="px-3 mt-4 mb-1 text-xs uppercase tracking-wider text-slate-500 font-semibold">Planning</div>
+    <div class="nav-item px-3 py-2 text-sm flex items-center gap-2" onclick="showView('plan-schedule-impacts')">
+      <span>📐</span><span class="flex-1">New Plan / Schedule Impacts</span><span class="badge-p0">P0</span>
+    </div>
+    <div class="nav-item px-3 py-2 text-sm flex items-center gap-2" onclick="showView('pop-outputs')">
+      <span>🔀</span><span class="flex-1">Plan over Plan Outputs</span><span class="badge-p0">P0</span>
+    </div>
+    <div class="nav-item px-3 py-2 text-sm flex items-center gap-2" onclick="showView('pop-inputs')">
+      <span>🔢</span><span class="flex-1">Plan over Plan Inputs</span><span class="badge-p1">P1</span>
+    </div>
+
+    <div class="px-3 mt-4 mb-1 text-xs uppercase tracking-wider text-slate-500 font-semibold">Audit</div>
+    <div class="nav-item px-3 py-2 text-sm flex items-center gap-2" onclick="showView('wg-audit')">
+      <span>🏢</span><span class="flex-1">WG Schedule Audit</span><span class="badge-p0">P0</span>
+    </div>
+    <div class="nav-item px-3 py-2 text-sm flex items-center gap-2" onclick="showView('expert-audit')">
+      <span>👤</span><span class="flex-1">Expert Schedule Audit</span><span class="badge-p0">P0</span>
+    </div>
+
+  </nav>
+  <div class="px-4 py-3 border-t border-[#1e3a5f] text-xs text-slate-500">
+    <div class="flex items-center gap-2">
+      <div class="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-xs">M</div>
+      <div>mmcdevitt@intuit.com</div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="flex-1 flex flex-col overflow-hidden">
+  <div class="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-4 flex-shrink-0">
+    <div class="flex-1 text-sm text-slate-500" id="breadcrumb">AI Observability Engine</div>
+    <div class="flex items-center gap-3 text-sm">
+      <select class="border rounded px-2 py-1 text-sm text-slate-600"><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option><option>All Workgroups</option></select>
+      <input type="date" class="border rounded px-2 py-1 text-sm text-slate-600" value="2025-03-01">
+      <button class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Apply</button>
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-y-auto p-6">
+
+    <!-- ===== AI ENGINE ===== -->
+    <div class="view active" id="view-ai-engine">
+      <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-6">
+          <h1 class="text-2xl font-bold text-slate-800">AI Observability Engine</h1>
+          <p class="text-slate-500 mt-1">Ask anything about scheduling, staffing, demand, and supply operations</p>
+          <div class="inline-flex items-center gap-1.5 mt-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-3 py-1">
+            <span class="w-2 h-2 bg-green-500 rounded-full inline-block"></span>Data as of Apr 22, 2026 · Last refresh: 2 min ago
+          </div>
+        </div>
+        <div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-5 flex items-start gap-3">
+          <span class="text-amber-500 text-lg">⚠️</span>
+          <div class="text-sm"><strong class="text-amber-800">4 active alerts</strong><span class="text-amber-700"> · Scheduled coverage below threshold in 3 intervals for CTG_US_DE_FS_PROF1_EN · </span><span class="text-blue-600 cursor-pointer underline" onclick="showView('alerts')">View alerts →</span></div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-5 space-y-4 min-h-64" id="chat-messages">
+            <div class="ai-bubble-ai text-sm"><div class="font-semibold text-slate-700 mb-1">👋 Hello, mmcdevitt</div><div class="text-slate-600">I can help you understand staffing readiness, supply plan changes, IDP performance, and more.</div></div>
+          </div>
+          <div class="px-5 pb-3" id="suggested-prompts">
+            <div class="text-xs text-slate-400 mb-2">Suggested queries</div>
+            <div>
+              <span class="chip" onclick="submitPrompt('Show me staffing readiness for CTG_US_DE_FS_PROF1_EN today')">Staffing readiness today</span>
+              <span class="chip" onclick="submitPrompt('Compare April Lock vs April Flash')">Plan over Plan comparison</span>
+              <span class="chip" onclick="submitPrompt('What are my largest gaps today?')">Largest gaps today</span>
+              <span class="chip" onclick="submitPrompt('Show me IDP view for CG US today')">IDP view</span>
+            </div>
+          </div>
+          <div class="border-t border-slate-100 px-4 py-3 flex gap-3">
+            <input type="text" id="ai-input" placeholder="Ask about staffing, supply, schedules, or plans..." class="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2" onkeydown="if(event.key==='Enter') submitPrompt(this.value)">
+            <button onclick="submitPrompt(document.getElementById('ai-input').value)" class="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700">Send</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-4 gap-4 mt-5">
+          <div class="kpi-card text-center"><div class="text-3xl font-bold text-blue-700">94.2%</div><div class="text-xs text-slate-500 mt-1">Avg Actual Coverage</div></div>
+          <div class="kpi-card text-center"><div class="text-3xl font-bold text-emerald-600">97.1%</div><div class="text-xs text-slate-500 mt-1">Scheduled Coverage</div></div>
+          <div class="kpi-card text-center"><div class="text-3xl font-bold text-amber-600">3</div><div class="text-xs text-slate-500 mt-1">Intervals Below Threshold</div></div>
+          <div class="kpi-card text-center"><div class="text-3xl font-bold text-purple-600">+5%</div><div class="text-xs text-slate-500 mt-1">Supply Soft Inputs Δ</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ALERTS ===== -->
+    <div class="view" id="view-alerts">
+      <div class="max-w-3xl">
+        <div class="flex items-center justify-between mb-5">
+          <h1 class="text-xl font-bold text-slate-800">Proactive Alerts <span class="badge-p0 ml-2">P0</span></h1>
+          <div class="flex gap-2"><button class="border border-slate-300 rounded px-3 py-1.5 text-sm hover:bg-slate-50">Configure Thresholds</button><button class="border border-slate-300 rounded px-3 py-1.5 text-sm hover:bg-slate-50">Alert History</button></div>
+        </div>
+        <div class="space-y-3">
+          <div class="bg-white rounded-lg p-4 border alert-critical shadow-sm"><div class="flex items-start justify-between"><div><div class="flex items-center gap-2 mb-1"><span class="text-red-600 font-bold text-sm">🚨 CRITICAL — Coverage Gap</span><span class="text-xs text-slate-400">2 min ago</span></div><p class="text-sm text-slate-700"><strong>CTG_US_DE_FS_PROF1_EN</strong> · Today 9:00–9:30 AM</p><p class="text-sm text-slate-600 mt-1">Actual hours tracking <strong>6.8% below scheduled</strong>. Required: 299 HC · Scheduled: 305 HC · Actual: 278 HC.</p></div><button class="text-slate-400 hover:text-slate-600 text-xs ml-4">Dismiss</button></div></div>
+          <div class="bg-white rounded-lg p-4 border alert-warning shadow-sm"><div class="flex items-start justify-between"><div><div class="flex items-center gap-2 mb-1"><span class="text-amber-600 font-bold text-sm">⚠️ WARNING — Plan Version Change</span><span class="text-xs text-slate-400">1 hr ago</span></div><p class="text-sm text-slate-700"><strong>WG 1 (CTG_US_DE_FS_PROF1_EN)</strong> · April Flash published</p><p class="text-sm text-slate-600 mt-1">Supply Soft Inputs increased <strong>10% → 15%</strong>, estimated <strong>+8.4% increase</strong> in staffing requirements.</p></div><button class="text-slate-400 hover:text-slate-600 text-xs ml-4">Dismiss</button></div></div>
+          <div class="bg-white rounded-lg p-4 border alert-info shadow-sm"><div class="flex items-start justify-between"><div><div class="flex items-center gap-2 mb-1"><span class="text-blue-600 font-bold text-sm">ℹ️ INFO — Schedule Audit</span><span class="text-xs text-slate-400">3 hrs ago</span></div><p class="text-sm text-slate-700"><strong>CTG_US_DE_FS_PROF1_EN</strong> · 14 work shifts modified</p><p class="text-sm text-slate-600 mt-1"><strong>14 shift edits</strong> and <strong>3 workgroup reassignments</strong> recorded. No anomalies detected.</p></div><button class="text-slate-400 hover:text-slate-600 text-xs ml-4">Dismiss</button></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ACTUAL vs REQ vs SCH ===== -->
+    <div class="view" id="view-act-req-sch">
+      <div class="mb-4 flex items-center justify-between">
+        <h1 class="text-xl font-bold text-slate-800">Actual vs REQ vs SCH <span class="badge-p0 ml-2">P0</span></h1>
+        <div class="flex items-center gap-3 text-sm">
+          <label class="flex items-center gap-1.5"><input type="radio" name="unit" checked> FTE / HC</label>
+          <label class="flex items-center gap-1.5"><input type="radio" name="unit"> Hours</label>
+          <select class="border rounded px-2 py-1"><option>Baseline Adj Productive (Type 2)</option><option>Staffed Hours</option></select>
+          <button onclick="toggleThresholdPanel()" class="flex items-center gap-1.5 border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50" id="threshold-toggle-btn">
+            ⚙ Thresholds
+          </button>
+        </div>
+      </div>
+
+      <!-- THRESHOLD CONFIG PANEL (collapsible) -->
+      <div id="threshold-panel" style="display:none" class="threshold-panel mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-slate-600 uppercase tracking-wide">Configure Alert Thresholds</span>
+          <span class="text-xs text-slate-400">Changes apply instantly to flags and summary counts</span>
+        </div>
+        <div class="grid grid-cols-2 gap-6">
+          <div>
+            <div class="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-2">
+              <span class="w-3 h-3 rounded inline-block" style="background:#dc2626"></span> SCH vs REQ Threshold
+            </div>
+            <div class="flex items-center gap-3 text-sm">
+              <span class="text-slate-500">Flag SCH as <span class="font-semibold text-red-600">Over</span> when &gt;</span>
+              <input type="number" id="thresh-sch-over" class="threshold-input" value="2" min="0" max="50" step="0.5" onchange="refreshARSView()">
+              <span class="text-slate-500">%</span>
+            </div>
+            <div class="flex items-center gap-3 text-sm mt-2">
+              <span class="text-slate-500">Flag SCH as <span class="font-semibold text-orange-600">Under</span> when &gt;</span>
+              <input type="number" id="thresh-sch-under" class="threshold-input" value="2" min="0" max="50" step="0.5" onchange="refreshARSView()">
+              <span class="text-slate-500">%</span>
+            </div>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-2">
+              <span class="w-3 h-3 rounded inline-block" style="background:#991b1b"></span> ACT vs SCH Threshold
+            </div>
+            <div class="flex items-center gap-3 text-sm">
+              <span class="text-slate-500">Flag ACT as <span class="font-semibold text-red-700">Critical</span> below</span>
+              <input type="number" id="thresh-act-crit" class="threshold-input" value="90" min="50" max="100" step="1" onchange="refreshARSView()">
+              <span class="text-slate-500">%</span>
+            </div>
+            <div class="flex items-center gap-3 text-sm mt-2">
+              <span class="text-slate-500">Flag ACT as <span class="font-semibold text-amber-600">Gap</span> below</span>
+              <input type="number" id="thresh-act-gap" class="threshold-input" value="95" min="50" max="100" step="1" onchange="refreshARSView()">
+              <span class="text-slate-500">%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FILTERS -->
+      <div class="filter-section">
+        <div class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-3">Filters</div>
+        <div class="grid grid-cols-4 gap-3 mb-3">
+          <div><div class="filter-label">Staff Group</div><select class="filter-select w-full" id="ars-sg-filter" onchange="refreshARSView()"><option value="all">All Workgroups</option><option value="ctg1">CTG_US_DE_FS_PROF1_EN</option><option value="sbg1">SBG_US_OL_AGGOLD_EN_PHN_SG</option><option value="ctg2">CTG_US_SE_FS_PROF2_EN</option><option value="sbg2">SBG_US_DE_AGGOLD_EN_CHA_SG</option></select></div>
+          <div><div class="filter-label">Date</div><input type="date" class="filter-select w-full" value="2025-03-01"></div>
+          <div><div class="filter-label">Business Unit</div><select class="filter-select w-full" id="ars-bu-filter" onchange="refreshARSView()"><option value="">All</option><option value="CG">CG</option><option value="PCG">PCG</option><option value="SBSEG">SBSEG</option></select></div>
+          <div><div class="filter-label">Expert Ecosystem</div><select class="filter-select w-full"><option value="">All</option><option>Tax Expert</option><option>BookkeepingExpert</option><option>Financial Advisor</option><option>CPA</option></select></div>
+        </div>
+        <div class="grid grid-cols-5 gap-3">
+          <div><div class="filter-label">Expert Ecosystem Parent</div><select class="filter-select w-full"><option value="">All</option><option>TurboTax Live</option><option>QuickBooks Live</option><option>Mint Live</option></select></div>
+          <div><div class="filter-label">Tier</div><select class="filter-select w-full"><option value="">All Tiers</option><option>Tier 1</option><option>Tier 2</option></select></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full" id="partner-filter" onchange="refreshARSView()"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select></div>
+          <div><div class="filter-label">Country</div><select class="filter-select w-full"><option value="">All</option><option>US</option><option>CA</option><option>IN</option><option>PH</option></select></div>
+          <div><div class="filter-label">Lock or Flash</div><select class="filter-select w-full"><option>Lock</option><option>Flash</option></select></div>
+        </div>
+      </div>
+
+      <!-- SUMMARY BREACH BANNER -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 mb-4">
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide mr-1">Threshold Breaches:</span>
+            <button class="breach-chip breach-chip-over" id="chip-sch-over" onclick="toggleBreachFilter('schOver')">
+              <span id="chip-sch-over-count">0</span>
+              <span>SCH Over</span>
+              <span class="text-xs font-normal opacity-75">▾ drill in</span>
+            </button>
+            <button class="breach-chip breach-chip-under" id="chip-sch-under" onclick="toggleBreachFilter('schUnder')">
+              <span id="chip-sch-under-count">0</span>
+              <span>SCH Under</span>
+              <span class="text-xs font-normal opacity-75">▾ drill in</span>
+            </button>
+            <span class="text-slate-200 text-lg">|</span>
+            <button class="breach-chip breach-chip-crit" id="chip-act-crit" onclick="toggleBreachFilter('actCrit')">
+              <span id="chip-act-crit-count">0</span>
+              <span>ACT Critical</span>
+              <span class="text-xs font-normal opacity-75">▾ drill in</span>
+            </button>
+            <button class="breach-chip breach-chip-gap" id="chip-act-gap" onclick="toggleBreachFilter('actGap')">
+              <span id="chip-act-gap-count">0</span>
+              <span>ACT Gap</span>
+              <span class="text-xs font-normal opacity-75">▾ drill in</span>
+            </button>
+            <button class="breach-chip breach-chip-ok" id="chip-ok" onclick="toggleBreachFilter('ok')">
+              <span id="chip-ok-count">0</span>
+              <span>Within Threshold</span>
+            </button>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-400" id="breach-filter-label"></span>
+            <button id="clear-breach-filter" onclick="clearBreachFilter()" style="display:none" class="text-xs text-blue-600 underline hover:text-blue-800">Clear filter</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW CONTROLS -->
+      <div class="flex items-center gap-4 mb-4">
+        <div class="flex items-center gap-2"><span class="text-sm text-slate-600 font-medium">Show Partner Breakdown:</span><button id="partner-toggle-btn" onclick="togglePartnerBreakdown()" class="toggle-btn">Off</button></div>
+        <div class="h-4 w-px bg-slate-200"></div>
+        <div class="flex items-center gap-2"><span class="text-sm text-slate-600 font-medium">View:</span>
+          <div class="flex gap-1">
+            <button class="toggle-btn active" id="toggle-interval" onclick="setGranularity('interval')">Interval</button>
+            <button class="toggle-btn" id="toggle-day" onclick="setGranularity('day')">Day</button>
+            <button class="toggle-btn" id="toggle-week" onclick="setGranularity('week')">Week</button>
+            <button class="toggle-btn" id="toggle-month" onclick="setGranularity('month')">Month</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+        <div class="text-sm font-semibold text-slate-600 mb-3" id="ars-chart-label">CTG_US_DE_FS_PROF1_EN · 3/1/2025 · 30-min intervals</div>
+        <canvas id="actReqSchChart"></canvas>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+          <span class="text-sm font-semibold text-slate-700" id="ars-table-label">Interval Detail — Gap Analysis</span>
+          <div class="flex items-center gap-3 text-xs text-slate-500">
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block"></span> SCH Over</span>
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-orange-100 border border-orange-300 inline-block"></span> SCH Under</span>
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-green-100 border border-green-300 inline-block"></span> Within threshold</span>
+          </div>
+        </div>
+        <div class="scrollable-table">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-slate-50 text-slate-600 text-xs uppercase">
+              <th class="px-4 py-2.5 text-left" id="col-period-header">Interval</th>
+              <th class="px-4 py-2.5 text-right">Required HC</th>
+              <th class="px-4 py-2.5 text-right">Scheduled HC</th>
+              <th class="px-4 py-2.5 text-right">Actual HC</th>
+              <th class="px-4 py-2.5 text-right">Sch vs Req %</th>
+              <th class="px-4 py-2.5 text-center">SCH Flag</th>
+              <th class="px-4 py-2.5 text-right">Act vs SCH %</th>
+              <th class="px-4 py-2.5 text-center">ACT Status</th>
+            </tr></thead>
+            <tbody id="arsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== OCC / UTIL / SHR ===== -->
+    <div class="view" id="view-occ-util-shr">
+      <div class="mb-4 flex items-center justify-between">
+        <h1 class="text-xl font-bold text-slate-800">OCC / UTIL / SHR <span class="badge-p0 ml-2">P0</span></h1>
+        <div class="text-sm text-slate-500">Occupancy · Utilization · Shrinkage</div>
+      </div>
+      <div class="filter-section">
+        <div class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-3">Filters</div>
+        <div class="grid grid-cols-4 gap-3 mb-3">
+          <div><div class="filter-label">Staff Group</div><select class="filter-select w-full"><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option></select></div>
+          <div><div class="filter-label">Date</div><input type="date" class="filter-select w-full" value="2025-04-27"></div>
+          <div><div class="filter-label">Business Unit</div><select class="filter-select w-full"><option value="">All</option><option>CG</option><option>PCG</option><option>SBSEG</option></select></div>
+          <div><div class="filter-label">Expert Ecosystem</div><select class="filter-select w-full"><option value="">All</option><option>Tax Expert</option><option>BookkeepingExpert</option></select></div>
+        </div>
+        <div class="grid grid-cols-5 gap-3">
+          <div><div class="filter-label">Expert Ecosystem Parent</div><select class="filter-select w-full"><option value="">All</option><option>TurboTax Live</option><option>QuickBooks Live</option></select></div>
+          <div><div class="filter-label">Tier</div><select class="filter-select w-full"><option value="">All Tiers</option><option>Tier 1</option><option>Tier 2</option></select></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full" id="occ-partner-filter" onchange="renderOccTable()"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select></div>
+          <div><div class="filter-label">Country</div><select class="filter-select w-full"><option value="">All</option><option>US</option><option>CA</option></select></div>
+          <div><div class="filter-label">Lock or Flash</div><select class="filter-select w-full"><option>Lock</option><option>Flash</option></select></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 mb-4 flex-wrap">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Change Pivot Table Setting</span>
+        <button id="occ-pivot-partner" onclick="setOccPivot('partner')" class="toggle-btn">By Partner</button>
+        <button id="occ-pivot-date" onclick="setOccPivot('date')" class="toggle-btn active">By Date</button>
+        <button id="occ-pivot-sg" onclick="setOccPivot('staffgroup')" class="toggle-btn">By Staff Group</button>
+        <div class="ml-auto">
+          <button onclick="toggleOccThresholdPanel()" id="occ-threshold-btn" class="flex items-center gap-1.5 border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">⚙ Thresholds</button>
+        </div>
+      </div>
+
+      <!-- OCC Threshold panel -->
+      <div id="occ-threshold-panel" style="display:none" class="threshold-panel mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-slate-600 uppercase tracking-wide">Configure OCC / UTIL / SHR Thresholds</span>
+          <span class="text-xs text-slate-400">Changes apply instantly to breach counts below</span>
+        </div>
+        <div class="grid grid-cols-3 gap-6 text-sm">
+          <div>
+            <div class="text-xs font-semibold text-slate-600 mb-2">Shrinkage %</div>
+            <div class="flex items-center gap-2"><span class="text-slate-500">Flag High above</span><input type="number" id="thresh-shr-hi" class="threshold-input" value="30" min="0" max="100" step="1" onchange="updateOccBreaches()"><span class="text-slate-500">%</span></div>
+            <div class="flex items-center gap-2 mt-1"><span class="text-slate-500">Flag Low below</span><input type="number" id="thresh-shr-lo" class="threshold-input" value="10" min="0" max="100" step="1" onchange="updateOccBreaches()"><span class="text-slate-500">%</span></div>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-slate-600 mb-2">Utilization %</div>
+            <div class="flex items-center gap-2"><span class="text-slate-500">Flag High above</span><input type="number" id="thresh-util-hi" class="threshold-input" value="90" min="0" max="100" step="1" onchange="updateOccBreaches()"><span class="text-slate-500">%</span></div>
+            <div class="flex items-center gap-2 mt-1"><span class="text-slate-500">Flag Low below</span><input type="number" id="thresh-util-lo" class="threshold-input" value="60" min="0" max="100" step="1" onchange="updateOccBreaches()"><span class="text-slate-500">%</span></div>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-slate-600 mb-2">Occupancy %</div>
+            <div class="flex items-center gap-2"><span class="text-slate-500">Flag High above</span><input type="number" id="thresh-occ-hi" class="threshold-input" value="92" min="0" max="100" step="1" onchange="updateOccBreaches()"><span class="text-slate-500">%</span></div>
+            <div class="flex items-center gap-2 mt-1"><span class="text-slate-500">Flag Low below</span><input type="number" id="thresh-occ-lo" class="threshold-input" value="70" min="0" max="100" step="1" onchange="updateOccBreaches()"><span class="text-slate-500">%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- OCC Breach summary banner -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 mb-4">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide mr-1">Threshold Breaches:</span>
+          <button class="breach-chip breach-chip-over" id="occ-chip-shr-hi" onclick="toggleOccBreachFilter('shrHi')"><span id="occ-chip-shr-hi-ct">0</span><span>SHR High</span><span class="text-xs font-normal opacity-75">▾</span></button>
+          <button class="breach-chip breach-chip-under" id="occ-chip-shr-lo" onclick="toggleOccBreachFilter('shrLo')"><span id="occ-chip-shr-lo-ct">0</span><span>SHR Low</span><span class="text-xs font-normal opacity-75">▾</span></button>
+          <span class="text-slate-200 text-lg">|</span>
+          <button class="breach-chip breach-chip-over" id="occ-chip-util-hi" onclick="toggleOccBreachFilter('utilHi')"><span id="occ-chip-util-hi-ct">0</span><span>UTIL High</span><span class="text-xs font-normal opacity-75">▾</span></button>
+          <button class="breach-chip breach-chip-under" id="occ-chip-util-lo" onclick="toggleOccBreachFilter('utilLo')"><span id="occ-chip-util-lo-ct">0</span><span>UTIL Low</span><span class="text-xs font-normal opacity-75">▾</span></button>
+          <span class="text-slate-200 text-lg">|</span>
+          <button class="breach-chip breach-chip-crit" id="occ-chip-occ-hi" onclick="toggleOccBreachFilter('occHi')"><span id="occ-chip-occ-hi-ct">0</span><span>OCC High</span><span class="text-xs font-normal opacity-75">▾</span></button>
+          <button class="breach-chip breach-chip-gap" id="occ-chip-occ-lo" onclick="toggleOccBreachFilter('occLo')"><span id="occ-chip-occ-lo-ct">0</span><span>OCC Low</span><span class="text-xs font-normal opacity-75">▾</span></button>
+          <button id="occ-clear-filter" onclick="clearOccFilter()" style="display:none" class="text-xs text-blue-600 underline ml-2">Clear filter</button>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-sm font-semibold text-slate-700" id="occ-chart-label">Occupancy % — By Partner</div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-500">Metric:</span>
+            <div class="flex gap-1">
+              <button class="toggle-btn text-xs py-1 px-3" id="occ-metric-shr" onclick="setOccMetric('shr')">Shrinkage</button>
+              <button class="toggle-btn active text-xs py-1 px-3" id="occ-metric-util" onclick="setOccMetric('util')">Utilization</button>
+              <button class="toggle-btn text-xs py-1 px-3" id="occ-metric-occ" onclick="setOccMetric('occ')">Occupancy</button>
+            </div>
+          </div>
+        </div>
+        <canvas id="occChart" style="max-height:260px"></canvas>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100"><span class="text-sm font-semibold text-slate-700" id="occ-table-title">Partner Detail</span></div>
+        <div class="scrollable-table"><table class="w-full text-sm"><thead id="occ-thead"></thead><tbody id="occ-tbody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ===== PLAN OVER PLAN OUTPUTS ===== -->
+    <div class="view" id="view-pop-outputs">
+      <div class="mb-4">
+        <h1 class="text-xl font-bold text-slate-800">Plan over Plan Outputs <span class="badge-p0 ml-2">P0</span></h1>
+        <p class="text-sm text-slate-500 mt-1">Compare requirement outputs produced by two published plan versions</p>
+      </div>
+      <div class="filter-section">
+        <div class="grid grid-cols-4 gap-3 mb-3">
+          <div><div class="filter-label">Staff Group</div><select class="filter-select w-full"><option>PCG_USA_LAC_PROD_A4_SG</option><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option></select></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full"><option value="">All Partners</option><option>FOUNDEVER_USA</option><option>CONCENTRIX_USA</option></select></div>
+          <div><div class="filter-label">Date From</div><input type="date" class="filter-select w-full" value="2025-05-13"></div>
+          <div><div class="filter-label">Date To</div><input type="date" class="filter-select w-full" value="2025-05-13"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><div class="filter-label">Interval From</div><select class="filter-select w-full"><option>6:00</option><option>8:00</option><option>10:00</option></select></div>
+          <div><div class="filter-label">Interval To</div><select class="filter-select w-full"><option>20:30</option><option>18:00</option><option>14:00</option></select></div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+        <div class="flex items-center gap-6 flex-wrap">
+          <div><div class="filter-label mb-1">Plan A</div>
+            <select class="filter-select" id="poo-plan-a" onchange="buildPOPOutputs();setTimeout(initPopCharts,50)">
+              <option value="aprilLock" selected>April Lock</option><option value="marchFlash">March Flash</option><option value="marchLock">March Lock</option><option value="mayLock">May Lock</option><option value="mayFlash">May Flash</option>
+            </select>
+          </div>
+          <div class="text-slate-400 text-2xl mt-4">→</div>
+          <div><div class="filter-label mb-1">Plan B</div>
+            <select class="filter-select" id="poo-plan-b" onchange="buildPOPOutputs();setTimeout(initPopCharts,50)">
+              <option value="aprilFlash" selected>April Flash</option><option value="aprilLock">April Lock</option><option value="marchFlash">March Flash</option><option value="mayLock">May Lock</option><option value="mayFlash">May Flash</option>
+            </select>
+          </div>
+          <div class="ml-4 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex-1">
+            🤖 Between April Lock and April Flash, <strong>Reallocated Hours increased 80 → 88</strong> (+10%) driven by Supply Soft Inputs change. All downstream stages inherited this increase.
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-5">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div class="grid grid-cols-5 text-xs font-bold uppercase text-slate-500 gap-2 flex-1">
+              <div class="col-span-1">Category</div><div class="col-span-1">Output</div>
+              <div class="text-right" id="poo-col-a">April Lock</div>
+              <div class="text-right" id="poo-col-b">April Flash</div>
+              <div class="text-right">Delta</div>
+            </div>
+            <button onclick="togglePOOPartners()" id="poo-partner-toggle-btn" class="ml-4 flex-shrink-0 text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 whitespace-nowrap">▼ Collapse Partners</button>
+          </div>
+          <div id="pooTable"></div>
+        </div>
+        <div class="flex flex-col gap-4">
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <div class="text-sm font-semibold text-slate-700 mb-1" id="pop-chart-a-title">Plan A — Requirements by Interval (April Lock)</div>
+            <p class="text-xs text-slate-400 mb-2">Requirement stages across the day (excl. Final Req)</p>
+            <canvas id="popChartA" style="max-height:220px"></canvas>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <div class="text-sm font-semibold text-slate-700 mb-1" id="pop-chart-b-title">Plan B — Requirements by Interval (April Flash)</div>
+            <p class="text-xs text-slate-400 mb-2">Requirement stages across the day (excl. Final Req)</p>
+            <canvas id="popChartB" style="max-height:220px"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PLAN OVER PLAN INPUTS ===== -->
+    <div class="view" id="view-pop-inputs">
+      <div class="mb-4">
+        <h1 class="text-xl font-bold text-slate-800">Plan over Plan Inputs <span class="badge-p1 ml-2">P1</span></h1>
+        <p class="text-sm text-slate-500 mt-1">Drill into which input assumptions changed between plan versions and understand their impact on outputs</p>
+      </div>
+      <div class="filter-section">
+        <div class="grid grid-cols-4 gap-3">
+          <div><div class="filter-label">Staff Group</div><select class="filter-select w-full"><option>PCG_USA_LAC_PROD_A4_SG</option><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option></select></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full"><option value="">All Partners</option><option>FOUNDEVER_USA</option><option>CONCENTRIX_USA</option></select></div>
+          <div><div class="filter-label">Date From</div><input type="date" class="filter-select w-full" value="2025-05-13"></div>
+          <div><div class="filter-label">Date To</div><input type="date" class="filter-select w-full" value="2025-05-13"></div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+        <div class="flex items-center gap-6 flex-wrap">
+          <div><div class="filter-label mb-1">Plan A</div>
+            <select class="filter-select" id="poi-plan-a" onchange="buildPOPInputs()">
+              <option value="aprilLock" selected>April Lock</option><option value="marchFlash">March Flash</option><option value="marchLock">March Lock</option>
+            </select>
+          </div>
+          <div class="text-slate-400 text-2xl mt-4">→</div>
+          <div><div class="filter-label mb-1">Plan B</div>
+            <select class="filter-select" id="poi-plan-b" onchange="buildPOPInputs()">
+              <option value="aprilFlash" selected>April Flash</option><option value="mayLock">May Lock</option><option value="mayFlash">May Flash</option>
+            </select>
+          </div>
+          <div class="ml-4 flex items-center gap-2 flex-1">
+            <span class="text-xs text-slate-500">Changes detected:</span>
+            <span id="poi-change-count" class="bg-amber-100 text-amber-800 font-bold text-xs px-2 py-0.5 rounded-full">1 change</span>
+            <span class="text-xs text-slate-400">— unchanged inputs shown in grey</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Two-column layout: condensed table on left, alert panel on right -->
+      <div class="flex gap-5 items-start">
+
+        <!-- Left: condensed table -->
+        <div class="flex-shrink-0" style="width:56%">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Show:</span>
+            <button class="toggle-btn text-xs py-1 px-3" id="poi-filter-all" onclick="setPOIFilter('all')">All Inputs</button>
+            <button class="toggle-btn active text-xs py-1 px-3" id="poi-filter-changed" onclick="setPOIFilter('changed')">Changed Only</button>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
+              <div class="grid text-xs font-bold uppercase text-slate-500" style="grid-template-columns:1fr 1.2fr 0.8fr 0.8fr 1fr; gap:8px">
+                <div>Segment</div>
+                <div>Input</div>
+                <div class="text-right" id="poi-col-a">Apr Lock</div>
+                <div class="text-right" id="poi-col-b">Apr Flash</div>
+                <div class="text-center">Change</div>
+              </div>
+            </div>
+            <div id="poiTable"></div>
+          </div>
+        </div>
+
+        <!-- Right: alert / impact panel -->
+        <div class="flex-1 min-w-0">
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4" id="poi-impact-banner">
+            <div class="text-sm font-semibold text-amber-800 mb-1.5">⚠️ Change Impact Alert</div>
+            <div class="text-xs text-amber-700 leading-relaxed">
+              <strong>Supply Soft Inputs:</strong> 0% → 10%<br><br>
+              This <strong>Allocation Plan Input</strong> change cascades downstream:
+              <ul class="mt-1.5 space-y-0.5 list-disc list-inside">
+                <li>Reallocated Hours: +8 hrs</li>
+                <li>Bounded Hours: +8 hrs</li>
+                <li>Total Staffing Hours: +8.4 hrs</li>
+                <li>Throttled Hours: +6.3 hrs</li>
+                <li>Adjusted Hours: +6.3 hrs</li>
+              </ul>
+              <div class="mt-2 font-semibold">Net HC impact: <span class="text-amber-900">+8 hrs (+10%)</span></div>
+            </div>
+          </div>
+
+          <!-- What didn't change -->
+          <div class="bg-white border border-slate-200 rounded-xl p-4">
+            <div class="text-sm font-semibold text-slate-700 mb-3">Unchanged Segments Summary</div>
+            <div class="space-y-2 text-xs text-slate-600">
+              <div class="flex items-center justify-between py-1.5 border-b border-slate-100">
+                <span class="font-medium text-slate-700">Demand Forecast</span>
+                <span class="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs font-semibold">✓ No Change</span>
+              </div>
+              <div class="flex items-center justify-between py-1.5 border-b border-slate-100">
+                <span class="font-medium text-slate-700">Marscape Input (Demand)</span>
+                <span class="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs font-semibold">✓ No Change</span>
+              </div>
+              <div class="flex items-center justify-between py-1.5 border-b border-slate-100">
+                <span class="font-medium text-slate-700">Marscape Input (Supply)</span>
+                <span class="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs font-semibold">✓ No Change</span>
+              </div>
+              <div class="flex items-center justify-between py-1.5 border-b border-slate-100">
+                <span class="font-medium text-slate-700">Capacity Plan Input</span>
+                <span class="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs font-semibold">✓ No Change</span>
+              </div>
+              <div class="flex items-center justify-between py-1.5">
+                <span class="font-medium text-slate-700">Allocation Plan Input</span>
+                <span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs font-semibold">1 Change</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===== NEW PLAN / SCHEDULE IMPACTS ===== -->
+    <div class="view" id="view-plan-schedule-impacts">
+      <div class="mb-4">
+        <h1 class="text-xl font-bold text-slate-800">New Plan / Schedule Impacts <span class="badge-p0 ml-2">P0</span></h1>
+        <p class="text-sm text-slate-500 mt-1">Compare staffing posture before and after a new plan publication — identify where the schedule is now under, at, or over requirement</p>
+      </div>
+
+      <!-- Plan + filters -->
+      <div class="filter-section">
+        <div class="grid grid-cols-4 gap-4 mb-3">
+          <div>
+            <div class="filter-label">Previous Plan (Before)</div>
+            <select class="filter-select w-full" id="psi-plan-before" onchange="buildPSI()">
+              <option value="aprilLock" selected>April Lock</option>
+              <option value="marchFlash">March Flash</option>
+              <option value="marchLock">March Lock</option>
+            </select>
+          </div>
+          <div>
+            <div class="filter-label">New Plan (After)</div>
+            <select class="filter-select w-full" id="psi-plan-after" onchange="buildPSI()">
+              <option value="aprilFlash" selected>April Flash</option>
+              <option value="mayLock">May Lock</option>
+              <option value="mayFlash">May Flash</option>
+            </select>
+          </div>
+          <div><div class="filter-label">Staff Group</div><select class="filter-select w-full"><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option><option>All Workgroups</option></select></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select></div>
+        </div>
+        <div class="grid grid-cols-3 gap-4">
+          <div><div class="filter-label">Date</div><input type="date" class="filter-select w-full" value="2025-04-22"></div>
+          <div><div class="filter-label">Business Unit</div><select class="filter-select w-full"><option value="">All</option><option>CG</option><option>PCG</option><option>SBSEG</option></select></div>
+          <div><div class="filter-label">Tier</div><select class="filter-select w-full"><option value="">All Tiers</option><option>Tier 1</option><option>Tier 2</option></select></div>
+        </div>
+      </div>
+
+      <!-- AI summary banner -->
+      <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-5 text-sm text-blue-800">
+        🤖 Publishing <strong>April Flash</strong> increased total requirements by <strong>+80 hrs (+4.4%)</strong> vs April Lock.
+        The schedule was built against April Lock — this creates <strong>net understaffing of 80 hrs</strong> across the day,
+        concentrated in the <strong>10:00–14:00</strong> peak window. <strong>12 intervals</strong> moved from At/Over into Under-staffed.
+      </div>
+
+      <!-- PSI Threshold config -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 mb-4 flex items-center gap-6 flex-wrap">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Thresholds:</span>
+        <div class="flex items-center gap-2 text-sm">
+          <span class="text-slate-500">Flag <span class="font-semibold text-amber-600">Over</span> when SCH &gt;</span>
+          <input type="number" id="thresh-psi-over" class="threshold-input" value="2" min="0" max="50" step="0.5" onchange="buildPSI()">
+          <span class="text-slate-500">% above REQ</span>
+        </div>
+        <div class="flex items-center gap-2 text-sm">
+          <span class="text-slate-500">Flag <span class="font-semibold text-red-600">Under</span> when SCH &gt;</span>
+          <input type="number" id="thresh-psi-under" class="threshold-input" value="2" min="0" max="50" step="0.5" onchange="buildPSI()">
+          <span class="text-slate-500">% below REQ</span>
+        </div>
+      </div>
+
+      <!-- Summary KPI cards -->
+      <div class="grid grid-cols-4 gap-4 mb-5" id="psi-kpis">
+        <div class="kpi-card text-center border-l-4 border-red-400"><div class="text-3xl font-bold text-red-600" id="psi-kpi-under">12</div><div class="text-xs text-slate-500 mt-1">Intervals Now Under-staffed</div><div class="text-xs text-red-500 mt-0.5">was 4 before new plan</div></div>
+        <div class="kpi-card text-center border-l-4 border-green-400"><div class="text-3xl font-bold text-green-600" id="psi-kpi-at">11</div><div class="text-xs text-slate-500 mt-1">Intervals At Staffing</div><div class="text-xs text-green-500 mt-0.5">was 14 before new plan</div></div>
+        <div class="kpi-card text-center border-l-4 border-amber-400"><div class="text-3xl font-bold text-amber-600" id="psi-kpi-over">7</div><div class="text-xs text-slate-500 mt-1">Intervals Over-staffed</div><div class="text-xs text-amber-500 mt-0.5">was 12 before new plan</div></div>
+        <div class="kpi-card text-center border-l-4 border-slate-300"><div class="text-3xl font-bold text-slate-700">+80 hrs</div><div class="text-xs text-slate-500 mt-1">Net Req Change</div><div class="text-xs text-slate-400 mt-0.5">Schedule unchanged</div></div>
+      </div>
+
+      <!-- Before / After status chart -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <div class="text-sm font-semibold text-slate-700">Staffing Status by Interval — Before vs After Plan Publication</div>
+            <p class="text-xs text-slate-400 mt-0.5">Each bar shows scheduled HC relative to the requirement for that plan version</p>
+          </div>
+          <div class="flex items-center gap-4 text-xs">
+            <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded inline-block bg-red-400"></span>Under-staffed</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded inline-block bg-green-400"></span>At Staffing (±2%)</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded inline-block bg-amber-400"></span>Over-staffed</span>
+          </div>
+        </div>
+        <canvas id="psiStatusChart" style="max-height:280px"></canvas>
+      </div>
+
+      <!-- Interval detail table — Before vs After -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-slate-700" id="psi-table-label">Interval Detail — Before vs After</span>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <div class="flex items-center gap-1">
+              <span class="text-xs text-slate-500 mr-1">View:</span>
+              <button class="toggle-btn active text-xs py-1 px-2" id="psi-gran-interval" onclick="setPSIGranularity('interval')">Interval</button>
+              <button class="toggle-btn text-xs py-1 px-2" id="psi-gran-day" onclick="setPSIGranularity('day')">Day</button>
+              <button class="toggle-btn text-xs py-1 px-2" id="psi-gran-week" onclick="setPSIGranularity('week')">Week</button>
+              <button class="toggle-btn text-xs py-1 px-2" id="psi-gran-month" onclick="setPSIGranularity('month')">Month</button>
+            </div>
+            <div class="h-4 w-px bg-slate-200"></div>
+            <div class="flex items-center gap-1 text-xs">
+              <button class="toggle-btn active text-xs py-1 px-2" id="psi-filter-all" onclick="setPSIFilter('all')">All</button>
+              <button class="toggle-btn text-xs py-1 px-2" id="psi-filter-changed" onclick="setPSIFilter('changed')">Status Changed</button>
+              <button class="toggle-btn text-xs py-1 px-2" id="psi-filter-under" onclick="setPSIFilter('under')">Now Under-staffed</button>
+              <button class="toggle-btn text-xs py-1 px-2" id="psi-filter-over" onclick="setPSIFilter('over')">Now Over-staffed</button>
+            </div>
+          </div>
+        </div>
+        <div class="scrollable-table">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-slate-50 text-slate-500 text-xs uppercase">
+              <th class="px-4 py-2.5 text-left" id="psi-col-period">Interval</th>
+              <th class="px-4 py-2.5 text-right">SCH HC</th>
+              <th class="px-4 py-2.5 text-right">REQ Before</th>
+              <th class="px-4 py-2.5 text-center">Status Before</th>
+              <th class="px-4 py-2.5 text-right">REQ After</th>
+              <th class="px-4 py-2.5 text-center">Status After</th>
+              <th class="px-4 py-2.5 text-right">Δ Requirement</th>
+              <th class="px-4 py-2.5 text-center">Impact</th>
+            </tr></thead>
+            <tbody id="psiTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== STAFFING ADJUSTMENTS ===== -->
+    <div class="view" id="view-staffing-adj">
+      <div class="mb-4">
+        <h1 class="text-xl font-bold text-slate-800">Staffing Adjustments <span class="badge-p0 ml-2">P0</span></h1>
+        <p class="text-sm text-slate-500 mt-1">Expert Plan → IDP → Synchrony reconciliation</p>
+      </div>
+      <div class="filter-section">
+        <div class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-3">Filters</div>
+        <div class="grid grid-cols-4 gap-3">
+          <div><div class="filter-label">Workgroup</div><select class="filter-select w-full"><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option><option>CTG_US_DE_FS_PROF1_EN</option><option>All Workgroups</option></select></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select></div>
+          <div><div class="filter-label">Date From</div><input type="date" class="filter-select w-full" value="2025-02-17"></div>
+          <div><div class="filter-label">Date To</div><input type="date" class="filter-select w-full" value="2025-02-20"></div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="scrollable-table">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-slate-50 text-slate-500 text-xs uppercase">
+              <th class="px-3 py-2.5 text-left">Time</th>
+              <th class="px-3 py-2.5 text-right">Total HC</th>
+              <th class="px-3 py-2.5 text-right">Adjustment Rule</th>
+              <th class="px-3 py-2.5 text-right">Adjusted Total HC</th>
+              <th class="px-3 py-2.5 text-right">Synchrony</th>
+              <th class="px-3 py-2.5 text-right">% Diff</th>
+            </tr></thead>
+            <tbody id="staffingAdjTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== EXPERT SCHEDULE AUDIT ===== -->
+    <div class="view" id="view-expert-audit">
+      <div class="mb-4">
+        <h1 class="text-xl font-bold text-slate-800">Expert Schedule Audit <span class="badge-p0 ml-2">P0</span></h1>
+        <p class="text-sm text-slate-500 mt-1">View a complete audit trail of schedule changes for an individual expert on a given date</p>
+      </div>
+
+      <!-- Expert + Date selectors -->
+      <div class="filter-section">
+        <div class="grid grid-cols-4 gap-4 items-end">
+          <div>
+            <div class="filter-label">Expert</div>
+            <select class="filter-select w-full" id="expert-select" onchange="buildExpertAudit()">
+              <option value="sarah">Sarah M. (EMP-10482)</option>
+              <option value="james">James T. (EMP-10391)</option>
+              <option value="priya">Priya K. (EMP-10554)</option>
+              <option value="carlos">Carlos R. (EMP-10228)</option>
+            </select>
+          </div>
+          <div>
+            <div class="filter-label">Date</div>
+            <input type="date" class="filter-select w-full" id="expert-audit-date" value="2025-04-22" onchange="buildExpertAudit()">
+          </div>
+          <div>
+            <div class="filter-label">Workgroup</div>
+            <select class="filter-select w-full"><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option></select>
+          </div>
+          <div>
+            <div class="filter-label">Partner</div>
+            <select class="filter-select w-full"><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary KPIs -->
+      <div class="grid grid-cols-4 gap-4 mb-5" id="expert-audit-kpis"></div>
+
+      <!-- Scheduled shift bar -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5" id="expert-shift-bar-card">
+        <div class="text-sm font-semibold text-slate-700 mb-3" id="expert-shift-bar-title">Scheduled Shift — Sarah M. · Apr 22, 2025</div>
+        <div class="relative h-10 bg-slate-100 rounded-lg overflow-hidden" style="min-width:100%">
+          <div id="expert-shift-bar" class="absolute h-full rounded-lg flex items-center px-3 text-white text-xs font-semibold" style="left:25%;width:50%;background:#2563eb;">8:00 AM – 4:30 PM (8.5 hrs)</div>
+        </div>
+        <div class="flex justify-between text-xs text-slate-400 mt-1"><span>6:00</span><span>9:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>21:00</span></div>
+      </div>
+
+      <!-- Audit timeline -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-700">Audit Trail</span>
+          <div class="flex items-center gap-3 text-xs text-slate-500">
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full inline-block audit-dot-add"></span>Added</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full inline-block audit-dot-edit"></span>Edited</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full inline-block audit-dot-remove"></span>Removed</span>
+          </div>
+        </div>
+        <div class="p-5">
+          <div class="relative" id="expert-audit-timeline" style="padding-left:44px;">
+            <div class="audit-timeline-line"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== WG SCHEDULE AUDIT ===== -->
+    <div class="view" id="view-wg-audit">
+      <div class="mb-4">
+        <h1 class="text-xl font-bold text-slate-800">WG Schedule Audit <span class="badge-p0 ml-2">P0</span></h1>
+        <p class="text-sm text-slate-500 mt-1">Aggregate scheduling change metrics at the workgroup level — volume, patterns, and coverage impact of edits over time</p>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-section">
+        <div class="grid grid-cols-4 gap-4">
+          <div><div class="filter-label">Workgroup</div><select class="filter-select w-full" id="wg-audit-wg" onchange="buildWGAudit()"><option value="ctg">CTG_US_DE_FS_PROF1_EN</option><option value="sbg">SBG_US_OL_AGGOLD_EN_PHN_SG</option></select></div>
+          <div><div class="filter-label">Date From</div><input type="date" class="filter-select w-full" value="2025-04-14" onchange="buildWGAudit()"></div>
+          <div><div class="filter-label">Date To</div><input type="date" class="filter-select w-full" value="2025-04-22" onchange="buildWGAudit()"></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select></div>
+        </div>
+      </div>
+
+      <!-- Summary KPIs -->
+      <div class="grid grid-cols-5 gap-4 mb-5">
+        <div class="kpi-card text-center"><div class="text-3xl font-bold text-slate-800">147</div><div class="text-xs text-slate-500 mt-1">Total Changes</div></div>
+        <div class="kpi-card text-center"><div class="text-3xl font-bold text-green-600">38</div><div class="text-xs text-slate-500 mt-1">Shifts Added</div></div>
+        <div class="kpi-card text-center"><div class="text-3xl font-bold text-blue-600">86</div><div class="text-xs text-slate-500 mt-1">Shifts Edited</div></div>
+        <div class="kpi-card text-center"><div class="text-3xl font-bold text-red-600">23</div><div class="text-xs text-slate-500 mt-1">Shifts Removed</div></div>
+        <div class="kpi-card text-center"><div class="text-3xl font-bold text-amber-600">12</div><div class="text-xs text-slate-500 mt-1">Unique Editors</div></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-5 mb-5">
+        <!-- Daily change volume chart -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <div class="text-sm font-semibold text-slate-700 mb-3">Daily Change Volume (Add / Edit / Remove)</div>
+          <canvas id="wgAuditDailyChart" style="max-height:220px"></canvas>
+        </div>
+        <!-- Change type breakdown + editor leaderboard -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <div class="text-sm font-semibold text-slate-700 mb-3">Change Type Distribution</div>
+          <canvas id="wgAuditDonutChart" style="max-height:200px"></canvas>
+        </div>
+      </div>
+
+      <!-- Interval heatmap of changes -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+        <div class="text-sm font-semibold text-slate-700 mb-1">Change Frequency by Interval</div>
+        <p class="text-xs text-slate-400 mb-3">Darker = more changes made to shifts covering that interval</p>
+        <div id="wg-audit-heatmap" class="flex gap-1 flex-wrap"></div>
+        <div class="flex justify-between text-xs text-slate-400 mt-2"><span>6:00</span><span>9:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>20:30</span></div>
+      </div>
+
+      <!-- Change Activity Log — When / Who / Why -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <span class="text-sm font-semibold text-slate-700">Schedule Change Activity Log</span>
+            <span class="text-xs text-slate-400 ml-2">— When changes occurred, by whom, and why</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-500">
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>Added</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>Edited</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>Removed</span>
+          </div>
+        </div>
+
+        <!-- Date rows with nested Who/Why accordion -->
+        <div id="wg-audit-log" class="divide-y divide-slate-100"></div>
+      </div>
+    </div>
+
+  </div><!-- end scrollable -->
+</div><!-- end main -->
+
+<!-- DRILL-DOWN DRAWER OVERLAY -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer-panel" id="drawer-panel">
+  <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
+    <div>
+      <div class="font-bold text-slate-800 text-base" id="drawer-title">Staff Groups Exceeding Threshold</div>
+      <div class="text-xs text-slate-400 mt-0.5" id="drawer-subtitle"></div>
+    </div>
+    <button onclick="closeDrawer()" class="text-slate-400 hover:text-slate-700 text-xl font-bold leading-none">×</button>
+  </div>
+  <div class="px-4 py-3 border-b border-slate-100 bg-slate-50 flex-shrink-0">
+    <div class="flex items-center gap-3 text-xs text-slate-500">
+      <span>Sort by:</span>
+      <button onclick="sortDrawer('magnitude')" id="sort-mag" class="toggle-btn active text-xs py-1 px-2">Magnitude ↓</button>
+      <button onclick="sortDrawer('label')" id="sort-lbl" class="toggle-btn text-xs py-1 px-2">Name A–Z</button>
+    </div>
+  </div>
+  <div class="flex-1 overflow-y-auto p-4" id="drawer-content"></div>
+  <div class="px-5 py-3 border-t border-slate-100 bg-slate-50 flex-shrink-0 text-xs text-slate-400">
+    Click a row to highlight it in the main table · <span id="drawer-total-count"></span>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CORE DATA
+// ============================================================
+const intervals = ['6:00','6:30','7:00','7:30','8:00','8:30','9:00','9:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00','19:30','20:00','20:30'];
+const requiredHC  = [136,174,208,233,243,270,299,325,337,328,345,327,320,315,288,274,259,259,233,213,189,188,170,150,129,122,88,55,21,20];
+// Contrived scheduledHC: make early-day and late-day intervals over-staffed after new plan
+// (6:00-8:00 and 18:00-20:30 are overscheduled; midday intervals become understaffed after Flash REQ increase)
+const scheduledHC = requiredHC.map((hc,i)=>Math.round(hc*[1.08,1.07,1.09,1.06,0.99,0.97,0.94,0.98,1.00,0.96,0.97,1.01,0.98,0.99,0.96,0.95,0.97,0.98,1.03,0.96,1.05,1.06,1.08,1.07,1.05,1.08,1.09,1.06,1.00,1.07][i]));
+const actualHC    = requiredHC.map((hc,i)=>Math.round(hc*[0.97,0.95,0.98,0.96,0.94,0.93,0.89,0.97,0.99,0.98,0.96,0.94,0.97,0.98,0.99,0.97,0.95,0.96,0.98,0.97,0.99,1.00,0.98,0.97,0.96,0.95,0.97,0.98,1.00,0.99][i]));
+const dayLabels    = ['Mon 3/1','Tue 3/2','Wed 3/3','Thu 3/4','Fri 3/5','Sat 3/6','Sun 3/7'];
+const dayRequired  = [6420,7210,7450,7380,6990,4200,2100];
+const dayScheduled = dayRequired.map((r,i)=>Math.round(r*[0.97,0.96,0.98,0.95,0.97,0.99,0.98][i]));
+const dayActual    = dayRequired.map((r,i)=>Math.round(r*[0.95,0.96,0.97,0.95,0.94,0.98,0.99][i]));
+const weekLabels   = ['Wk 1 (3/1–3/7)','Wk 2 (3/8–3/14)','Wk 3 (3/15–3/21)','Wk 4 (3/22–3/28)'];
+const weekRequired = [41750,43200,42800,40100];
+const weekScheduled= weekRequired.map((r,i)=>Math.round(r*[0.97,0.98,0.96,0.97][i]));
+const weekActual   = weekRequired.map((r,i)=>Math.round(r*[0.955,0.961,0.968,0.952][i]));
+const monthLabels   = ['Jan 2025','Feb 2025','Mar 2025','Apr 2025'];
+const monthRequired = [162000,148000,171000,165000];
+const monthScheduled= monthRequired.map((r,i)=>Math.round(r*[0.97,0.98,0.96,0.97][i]));
+const monthActual   = monthRequired.map((r,i)=>Math.round(r*[0.958,0.962,0.955,0.971][i]));
+let currentGranularity = 'interval', showPartners = false;
+
+const planLabels = {marchLock:'March Lock',marchFlash:'March Flash',aprilLock:'April Lock',aprilFlash:'April Flash',mayLock:'May Lock',mayFlash:'May Flash'};
+
+// ============================================================
+// POP OUTPUTS DATA (from Excel)
+// ============================================================
+const pooRows = [
+  { cat:'Capacity Plan', metric:'Supply Volume',            planA:150.5,  planB:150.5,  partnerData:null },
+  { cat:'Capacity Plan', metric:'Supply AHT',               planA:22.2,   planB:22.2,   partnerData:null },
+  { cat:'Capacity Plan', metric:'Occupancy',                planA:'69.7%', planB:'69.7%',partnerData:null },
+  { cat:'Capacity Plan', metric:'Supply Load',              planA:'69.7%', planB:'69.7%',partnerData:null },
+  { cat:'Capacity Plan', metric:'FO_Fraction',              planA:1,       planB:1,      partnerData:null },
+  { cat:'Capacity Plan', metric:'Headcount',                planA:160,     planB:160,    partnerData:null },
+  { cat:'Capacity Plan', metric:'Baseline Productive Hours', planA:80,     planB:80,     partnerData:null },
+
+  { cat:'Allocation Plan', metric:'Baseline Adjusted Productive Hours', planA:80, planB:80, partnerData:[
+    {name:'FOUNDEVER_USA', planA:40, planB:40},
+    {name:'CONCENTRIX_USA',planA:40, planB:40},
+  ]},
+  { cat:'Allocation Plan', metric:'Reallocated Hours', planA:80, planB:88, partnerData:[
+    {name:'FOUNDEVER_USA', planA:40, planB:44},
+    {name:'CONCENTRIX_USA',planA:40, planB:44},
+  ]},
+  { cat:'Allocation Plan', metric:'Bounded Hours', planA:80, planB:88, partnerData:[
+    {name:'FOUNDEVER_USA', planA:40, planB:44},
+    {name:'CONCENTRIX_USA',planA:40, planB:44},
+  ]},
+  { cat:'Allocation Plan', metric:'Total Staffing Hours', planA:84.2, planB:92.6, partnerData:[
+    {name:'FOUNDEVER_USA', planA:42.1, planB:46.3},
+    {name:'CONCENTRIX_USA',planA:42.1, planB:46.3},
+  ]},
+  { cat:'Allocation Plan', metric:'Throttled Hours', planA:40, planB:46.3, partnerData:[
+    {name:'FOUNDEVER_USA', planA:20, planB:23.2},
+    {name:'CONCENTRIX_USA',planA:20, planB:23.2},
+  ]},
+  { cat:'Allocation Plan', metric:'Adjusted Hours', planA:40, planB:46.3, partnerData:[
+    {name:'FOUNDEVER_USA', planA:20, planB:23.2},
+    {name:'CONCENTRIX_USA',planA:20, planB:23.2},
+  ]},
+];
+
+// ============================================================
+// POP INPUTS DATA (from Excel)
+// ============================================================
+const poiRows = [
+  { seg:'Demand Forecast',          metric:'Volume (Offered)',    planA:'159',        planB:'159',        changed:false },
+  { seg:'Demand Forecast',          metric:'AHT',                 planA:'22.2',       planB:'22.2',       changed:false },
+  { seg:'Demand Forecast',          metric:'IDA',                 planA:'—',          planB:'No Change',  changed:false },
+  { seg:'Demand Forecast',          metric:'BO Ratio',            planA:'0',          planB:'0',          changed:false },
+  { seg:'Demand Forecast',          metric:'BO CST',              planA:'0',          planB:'0',          changed:false },
+  { seg:'Marscape Input (Demand)',   metric:'Handle Rate',         planA:'0.95',       planB:'0.95',       changed:false },
+  { seg:'Marscape Input (Demand)',   metric:'BO MD Distribution',  planA:'—',          planB:'No Change',  changed:false },
+  { seg:'Marscape Input (Demand)',   metric:'SLP_80',              planA:'600',        planB:'600',        changed:false },
+  { seg:'Marscape Input (Demand)',   metric:'ASA',                 planA:'600',        planB:'600',        changed:false },
+  { seg:'Marscape Input (Supply)',   metric:'Concurrency Max',     planA:'1',          planB:'1',          changed:false },
+  { seg:'Marscape Input (Supply)',   metric:'Headcount Max',       planA:'20,000',     planB:'20,000',     changed:false },
+  { seg:'Marscape Input (Supply)',   metric:'Headcount Min',       planA:'0',          planB:'0',          changed:false },
+  { seg:'Marscape Input (Supply)',   metric:'Occupancy',           planA:'1',          planB:'1',          changed:false },
+  { seg:'Marscape Input (Supply)',   metric:'FG to WG Mapping',    planA:'—',          planB:'No Change',  changed:false },
+  { seg:'Capacity Plan Input',       metric:'Tier 2 Ratio Distribution', planA:'NA',  planB:'NA',         changed:false },
+  { seg:'Allocation Plan Input',     metric:'Risk Tolerance',      planA:'0',          planB:'0',          changed:false },
+  { seg:'Allocation Plan Input',     metric:'Allocation %',        planA:'—',          planB:'No Change',  changed:false },
+  { seg:'Allocation Plan Input',     metric:'Supply Soft Inputs',  planA:'0',          planB:'0.1',        changed:true  },
+  { seg:'Allocation Plan Input',     metric:'Min Max HC Input',    planA:'—',          planB:'—',          changed:false },
+  { seg:'Allocation Plan Input',     metric:'Shrinkage',           planA:'0.05',       planB:'0.05',       changed:false },
+  { seg:'Allocation Plan Input',     metric:'Throttling',          planA:'0.5',        planB:'0.5',        changed:false },
+  { seg:'Allocation Plan Input',     metric:'Alt Source Adjustments', planA:'—',       planB:'—',          changed:false },
+];
+
+let poiFilter = 'changed'; // default: show changed only
+
+function buildPOPOutputs() {
+  const planA = document.getElementById('poo-plan-a')?.value || 'aprilLock';
+  const planB = document.getElementById('poo-plan-b')?.value || 'aprilFlash';
+  const labelA = planLabels[planA]||planA;
+  const labelB = planLabels[planB]||planB;
+  if(document.getElementById('poo-col-a')) document.getElementById('poo-col-a').textContent = labelA;
+  if(document.getElementById('poo-col-b')) document.getElementById('poo-col-b').textContent = labelB;
+  const scaleFl = planB.includes('Flash') ? 1.10 : (planA.includes('Flash') ? 0.909 : 1.0);
+
+  const tb = document.getElementById('pooTable');
+  if(!tb) return;
+  let html='', lastCat='';
+
+  pooRows.forEach(row => {
+    if(row.cat !== lastCat) {
+      html += `<div class="px-4 py-1.5 bg-slate-50 border-b border-slate-100 text-xs font-bold uppercase text-slate-500 tracking-wide">${row.cat}</div>`;
+      lastCat = row.cat;
+    }
+    const rawA = typeof row.planA === 'number' ? row.planA : row.planA;
+    const rawB = typeof row.planA === 'number' ? +(row.planB * (row.planB !== row.planA ? scaleFl : 1)).toFixed(1) : row.planB;
+    const valA = typeof row.planA === 'number' ? row.planA : row.planA;
+    const valB = typeof row.planA === 'number' ? +(row.planB * (row.planB !== row.planA ? scaleFl : 1)).toFixed(1) : row.planB;
+    const numDelta = (typeof row.planA === 'number' && typeof row.planB === 'number') ? +(valB - row.planA).toFixed(1) : null;
+    const changed = numDelta !== null && numDelta !== 0;
+    const hl = changed ? 'bg-amber-50' : '';
+    const deltaHtml = numDelta !== null
+      ? (changed ? `<span class="text-xs font-semibold text-amber-700">${numDelta>0?'▲ +':'▼ '}${numDelta}</span>` : '<span class="text-slate-300 text-xs">—</span>')
+      : '<span class="text-slate-300 text-xs">—</span>';
+
+    html += `<div class="px-4 py-2.5 border-b border-slate-50 text-sm ${hl}">
+      <div class="grid grid-cols-5 gap-2 items-center">
+        <div class="text-slate-400 text-xs">${row.cat}</div>
+        <div class="text-slate-700 font-medium">${row.metric}</div>
+        <div class="text-right font-mono text-xs">${row.planA}</div>
+        <div class="text-right font-mono text-xs ${changed?'font-bold text-blue-700':''}">${valB}</div>
+        <div class="text-right">${deltaHtml}</div>
+      </div>`;
+
+    if(row.partnerData) {
+      row.partnerData.forEach(p => {
+        const pB = +(p.planB * (p.planB !== p.planA ? scaleFl : 1)).toFixed(1);
+        const pDelta = +(pB - p.planA).toFixed(1);
+        const pChanged = pDelta !== 0;
+        const display = pooPartnersVisible ? '' : 'display:none;';
+        html += `<div class="poo-partner-row grid grid-cols-5 gap-2 items-center py-1 ${pChanged?'bg-amber-50/50':''}" style="${display}">
+          <div></div>
+          <div class="indent-partner pl-8 text-slate-400">${p.name}</div>
+          <div class="text-right font-mono text-xs text-slate-400">${p.planA}</div>
+          <div class="text-right font-mono text-xs ${pChanged?'text-blue-600 font-semibold':'text-slate-400'}">${pB}</div>
+          <div class="text-right text-xs">${pChanged?`<span class="text-amber-700 font-semibold">${pDelta>0?'▲ +':'▼ '}${pDelta}</span>`:'<span class="text-slate-200">—</span>'}</div>
+        </div>`;
+      });
+    }
+    html += `</div>`;
+  });
+  tb.innerHTML = html;
+
+  // update chart titles
+  if(document.getElementById('pop-chart-a-title')) document.getElementById('pop-chart-a-title').textContent = `Plan A — Requirements by Interval (${labelA})`;
+  if(document.getElementById('pop-chart-b-title')) document.getElementById('pop-chart-b-title').textContent = `Plan B — Requirements by Interval (${labelB})`;
+}
+
+function buildPOPInputs() {
+  const planA = document.getElementById('poi-plan-a')?.value || 'aprilLock';
+  const planB = document.getElementById('poi-plan-b')?.value || 'aprilFlash';
+  const labelA = planLabels[planA]||planA;
+  const labelB = planLabels[planB]||planB;
+  if(document.getElementById('poi-col-a')) document.getElementById('poi-col-a').textContent = labelA;
+  if(document.getElementById('poi-col-b')) document.getElementById('poi-col-b').textContent = labelB;
+
+  const changedCount = poiRows.filter(r=>r.changed).length;
+  if(document.getElementById('poi-change-count')) document.getElementById('poi-change-count').textContent = `${changedCount} change${changedCount!==1?'s':''}`;
+  renderPOITable();
+}
+
+function setPOIFilter(f) {
+  poiFilter = f;
+  ['all','changed'].forEach(x => document.getElementById('poi-filter-'+x)?.classList.toggle('active', x===f));
+  renderPOITable();
+}
+
+function renderPOITable() {
+  const tb = document.getElementById('poiTable');
+  if(!tb) return;
+  let html='', lastSeg='';
+  const rows = poiFilter==='changed' ? poiRows.filter(r=>r.changed) : poiRows;
+  if(rows.length===0){tb.innerHTML='<div class="px-3 py-8 text-center text-slate-400 text-sm">No changed inputs found between these plans.</div>';return;}
+
+  // Metrics to format as percentages (multiply by 100 and append %)
+  const pctMetrics = new Set(['Handle Rate','Supply Soft Inputs','Shrinkage','Throttling']);
+
+  // FG/WG mapping display helper
+  const fgwgHtml = `<div class="text-xs font-mono leading-relaxed">
+    <div class="text-slate-600"><span class="text-slate-400">FG:</span> PCG_USA_LAC_PROD_A4</div>
+    <div class="text-slate-600"><span class="text-slate-400">WG:</span> PCG_USA_LAC_PROD_A4_SG</div>
+  </div>`;
+
+  function fmtVal(metric, raw) {
+    if (raw === '—' || raw === 'No Change' || raw === 'NA') return raw;
+    if (metric === 'FG to WG Mapping') return fgwgHtml;
+    if (pctMetrics.has(metric)) {
+      const n = parseFloat(raw);
+      if (!isNaN(n)) return (n * 100).toFixed(0) + '%';
+    }
+    return raw;
+  }
+
+  rows.forEach(row => {
+    if(row.seg !== lastSeg) {
+      html+=`<div class="px-3 py-1.5 bg-slate-50 border-b border-slate-100 text-xs font-bold uppercase text-slate-500 tracking-wide">${row.seg}</div>`;
+      lastSeg=row.seg;
+    }
+    const hl = row.changed ? 'bg-amber-50' : '';
+    const metricDimmed = !row.changed ? 'text-slate-400' : 'text-slate-700';
+    const bValStyle = row.changed ? 'font-bold text-blue-700' : 'text-slate-400';
+    const deltaHtml = row.changed
+      ? `<span class="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs font-semibold px-1.5 py-0.5 rounded-full">▲</span>`
+      : `<span class="text-slate-200 text-xs">—</span>`;
+
+    const isFGWG = row.metric === 'FG to WG Mapping';
+
+    html+=`<div class="px-3 border-b border-slate-50 text-xs ${hl} ${isFGWG ? 'py-2' : 'py-2'}">
+      <div style="display:grid;grid-template-columns:1fr 1.2fr 0.8fr 0.8fr 1fr;gap:8px;align-items:start;">
+        <div class="text-slate-400 text-xs truncate">${row.seg.replace('Marscape Input ','MS ')}</div>
+        <div class="${metricDimmed} font-medium">${row.metric}</div>
+        <div class="text-right font-mono text-xs ${!row.changed?'text-slate-400':''}">${fmtVal(row.metric, row.planA)}</div>
+        <div class="text-right font-mono text-xs ${bValStyle}">${fmtVal(row.metric, row.planB)}</div>
+        <div class="text-center">${deltaHtml}</div>
+      </div>
+    </div>`;
+  });
+  tb.innerHTML = html;
+}
+
+// ============================================================
+// OCC THRESHOLDS AND BREACH SUMMARY
+// ============================================================
+let occBreachFilter = null;
+
+function toggleOccThresholdPanel() {
+  const p = document.getElementById('occ-threshold-panel');
+  const btn = document.getElementById('occ-threshold-btn');
+  const open = p.style.display === 'none';
+  p.style.display = open ? 'block' : 'none';
+  btn.style.background = open ? '#eff6ff' : '';
+  btn.style.borderColor = open ? '#93c5fd' : '';
+  btn.style.color       = open ? '#1d4ed8' : '';
+}
+
+function getOccThresholds() {
+  return {
+    shrHi:  parseFloat(document.getElementById('thresh-shr-hi')?.value  ?? 30),
+    shrLo:  parseFloat(document.getElementById('thresh-shr-lo')?.value  ?? 10),
+    utilHi: parseFloat(document.getElementById('thresh-util-hi')?.value ?? 90),
+    utilLo: parseFloat(document.getElementById('thresh-util-lo')?.value ?? 60),
+    occHi:  parseFloat(document.getElementById('thresh-occ-hi')?.value  ?? 92),
+    occLo:  parseFloat(document.getElementById('thresh-occ-lo')?.value  ?? 70),
+  };
+}
+
+function updateOccBreaches() {
+  const t = getOccThresholds();
+  const pf = document.getElementById('occ-partner-filter')?.value || '';
+  const partners = ['INTUIT','JDA','MAGNIT'].filter(p => !pf || p===pf);
+  const sgs = staffGroups;
+
+  // Collect all data points based on pivot
+  let points = [];
+  if (occPivot === 'partner') {
+    partners.forEach(p => points.push(occPartners[p]));
+  } else if (occPivot === 'date') {
+    occDates.forEach((_,di) => partners.forEach(p => points.push(occByDate[p][di])));
+  } else {
+    sgs.forEach(sg => points.push(occBySG[sg]));
+  }
+
+  const ct = {shrHi:0,shrLo:0,utilHi:0,utilLo:0,occHi:0,occLo:0};
+  points.forEach(p => {
+    if(p.shr > t.shrHi) ct.shrHi++;
+    if(p.shr < t.shrLo) ct.shrLo++;
+    if(p.util > t.utilHi) ct.utilHi++;
+    if(p.util < t.utilLo) ct.utilLo++;
+    if(p.occ > t.occHi) ct.occHi++;
+    if(p.occ < t.occLo) ct.occLo++;
+  });
+
+  Object.keys(ct).forEach(k => {
+    const el = document.getElementById(`occ-chip-${k.replace(/([A-Z])/g,m=>'-'+m.toLowerCase())}-ct`);
+    if(el) el.textContent = ct[k];
+  });
+  // update active chip border
+  ['shrHi','shrLo','utilHi','utilLo','occHi','occLo'].forEach(k => {
+    const id = `occ-chip-${k.replace(/([A-Z])/g,m=>'-'+m.toLowerCase())}`;
+    document.getElementById(id)?.classList.toggle('active', occBreachFilter===k);
+  });
+  const clearBtn = document.getElementById('occ-clear-filter');
+  if(clearBtn) clearBtn.style.display = occBreachFilter ? 'inline' : 'none';
+}
+
+function toggleOccBreachFilter(type) {
+  occBreachFilter = occBreachFilter===type ? null : type;
+  updateOccBreaches();
+  renderOccTable();
+  renderOccChart();
+}
+function clearOccFilter() {
+  occBreachFilter = null;
+  updateOccBreaches();
+  renderOccTable();
+  renderOccChart();
+}
+
+// ============================================================
+// PSI OVER-STAFFED FILTER + THRESHOLD-AWARE STATUS
+// ============================================================
+function getPSIThresholds() {
+  return {
+    over:  parseFloat(document.getElementById('thresh-psi-over')?.value  ?? 2) / 100,
+    under: parseFloat(document.getElementById('thresh-psi-under')?.value ?? 2) / 100,
+  };
+}
+
+function getStatusLabelPSI(sch, req) {
+  const t = getPSIThresholds();
+  const diff = (sch-req)/req;
+  if (diff > t.over)   return 'over';
+  if (diff < -t.under) return 'under';
+  return 'at';
+}
+
+
+// ============================================================
+// OCC DATA
+// ============================================================
+let occPivot = 'date';
+const occDates = ['4/21/2026','4/22/2026','4/23/2026','4/24/2026','4/25/2026','4/26/2026','4/27/2026'];
+const staffGroups = ['CTG_US_DE_FS_PROF1_EN','SBG_US_OL_AGGOLD_EN_PHN_SG','CTG_US_SE_FS_PROF2_EN','SBG_US_DE_AGGOLD_EN_CHA_SG'];
+const occPartners = {
+  INTUIT:{req:1420,sch:1384,act:1298,shr:15.0,util:62.4,occ:82.1},
+  JDA:{req:680,sch:651,act:622,shr:65.9,util:64.0,occ:100.0},
+  MAGNIT:{req:310,sch:299,act:284,shr:12.7,util:77.9,occ:88.9},
+};
+const occByDate = {
+  INTUIT:[{shr:14.8,util:61.9,occ:81.4},{shr:15.2,util:62.1,occ:82.8},{shr:15.0,util:63.0,occ:83.1},{shr:14.5,util:61.5,occ:80.9},{shr:15.3,util:62.8,occ:82.5},{shr:15.1,util:62.2,occ:81.9},{shr:15.0,util:62.4,occ:82.1}],
+  JDA:[{shr:64.2,util:63.1,occ:98.2},{shr:66.1,util:64.5,occ:100.0},{shr:65.5,util:64.0,occ:99.8},{shr:63.8,util:63.5,occ:97.4},{shr:66.3,util:65.1,occ:100.0},{shr:65.7,util:63.9,occ:100.0},{shr:65.9,util:64.0,occ:100.0}],
+  MAGNIT:[{shr:11.9,util:77.1,occ:87.8},{shr:12.4,util:77.5,occ:88.2},{shr:13.1,util:78.3,occ:89.4},{shr:12.0,util:76.9,occ:87.5},{shr:13.2,util:78.1,occ:89.1},{shr:12.8,util:77.8,occ:88.7},{shr:12.7,util:77.9,occ:88.9}],
+};
+const occBySG = {
+  'CTG_US_DE_FS_PROF1_EN':{req:1250,sch:1218,act:1140,shr:22.4,util:68.3,occ:86.2},
+  'SBG_US_OL_AGGOLD_EN_PHN_SG':{req:870,sch:840,act:798,shr:19.1,util:71.5,occ:88.4},
+  'CTG_US_SE_FS_PROF2_EN':{req:530,sch:511,act:476,shr:25.8,util:66.9,occ:84.7},
+  'SBG_US_DE_AGGOLD_EN_CHA_SG':{req:760,sch:765,act:690,shr:18.6,util:73.2,occ:91.8},
+};
+function renderOccTable(){
+  const thead=document.getElementById('occ-thead'),tbody=document.getElementById('occ-tbody'),titleEl=document.getElementById('occ-table-title');
+  const pf=document.getElementById('occ-partner-filter')?.value||'';
+  const stdHdr=`<tr class="bg-slate-50 text-slate-500 text-xs uppercase"><th class="px-4 py-2.5 text-left">Row</th><th class="px-4 py-2.5 text-right">Required HC</th><th class="px-4 py-2.5 text-right">Scheduled HC</th><th class="px-4 py-2.5 text-right">Actual HC</th><th class="px-4 py-2.5 text-right">Shrinkage %</th><th class="px-4 py-2.5 text-right">Utilization %</th><th class="px-4 py-2.5 text-right">Occupancy %</th></tr>`;
+  if(occPivot==='partner'){
+    titleEl.textContent='Partner Detail'; thead.innerHTML=stdHdr;
+    const ps=['INTUIT','JDA','MAGNIT'].filter(p=>!pf||p===pf);
+    let h='',tR=0,tS=0,tA=0;
+    ps.forEach((p,pi)=>{const d=occPartners[p];tR+=d.req;tS+=d.sch;tA+=d.act;const e=pi%2===0?'bg-white':'bg-slate-50/40';
+      h+=`<tr class="${e}"><td class="px-4 py-2.5 font-semibold text-slate-700">${p}</td><td class="px-4 py-2.5 text-right font-mono">${d.req.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${d.sch.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${d.act.toLocaleString()}</td><td class="px-4 py-2.5 text-right">${d.shr.toFixed(1)}%</td><td class="px-4 py-2.5 text-right">${d.util.toFixed(1)}%</td><td class="px-4 py-2.5 text-right">${d.occ.toFixed(1)}%</td></tr>`;
+    });
+    h+=`<tr class="bg-slate-100 font-semibold border-t-2 border-slate-300"><td class="px-4 py-2.5 text-slate-700">Total / Avg</td><td class="px-4 py-2.5 text-right font-mono">${tR.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${tS.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${tA.toLocaleString()}</td><td class="px-4 py-2.5 text-right">—</td><td class="px-4 py-2.5 text-right">—</td><td class="px-4 py-2.5 text-right">—</td></tr>`;
+    tbody.innerHTML=h;
+  } else if(occPivot==='date'){
+    titleEl.textContent='Date Detail — by Partner';
+    const ps=['INTUIT','JDA','MAGNIT'].filter(p=>!pf||p===pf);
+    let th=`<tr class="bg-slate-50 text-slate-500 text-xs uppercase"><th class="px-4 py-2.5 text-left">Date</th>`;
+    ps.forEach(p=>{th+=`<th class="px-2 py-1 text-center border-l border-slate-200" colspan="3"><div class="font-bold text-slate-700 text-xs">${p}</div><div class="grid grid-cols-3 gap-0 mt-0.5 text-slate-400 font-normal normal-case" style="font-size:10px"><span class="text-center">SHR%</span><span class="text-center">UTIL%</span><span class="text-center">OCC%</span></div></th>`;});
+    thead.innerHTML=th+'</tr>';
+    let tb2='';
+    occDates.forEach((d,di)=>{const e=di%2===0?'bg-white':'bg-slate-50/40';let r=`<tr class="${e}"><td class="px-4 py-2.5 font-semibold text-slate-600 text-sm">${d}</td>`;
+      ps.forEach(p=>{const v=occByDate[p][di];r+=`<td class="px-3 py-2 text-center border-l border-slate-100 text-xs">${v.shr.toFixed(1)}%</td><td class="px-3 py-2 text-center text-xs">${v.util.toFixed(1)}%</td><td class="px-3 py-2 text-center text-xs">${v.occ.toFixed(1)}%</td>`;});
+      tb2+=r+'</tr>';
+    });
+    tb2+=`<tr class="bg-slate-100 font-semibold border-t-2 border-slate-300"><td class="px-4 py-2.5 text-slate-700">Avg</td>${ps.map(p=>`<td class="px-3 py-2 text-center border-l border-slate-200 text-xs">${(occByDate[p].reduce((s,v)=>s+v.shr,0)/occDates.length).toFixed(1)}%</td><td class="px-3 py-2 text-center text-xs">${(occByDate[p].reduce((s,v)=>s+v.util,0)/occDates.length).toFixed(1)}%</td><td class="px-3 py-2 text-center text-xs">${(occByDate[p].reduce((s,v)=>s+v.occ,0)/occDates.length).toFixed(1)}%</td>`).join('')}</tr>`;
+    tbody.innerHTML=tb2;
+  } else {
+    titleEl.textContent='Staff Group Detail'; thead.innerHTML=stdHdr.replace('<th class="px-4 py-2.5 text-left">Row</th>','<th class="px-4 py-2.5 text-left">Staff Group</th>');
+    let h='',tR=0,tS=0,tA=0;
+    staffGroups.forEach((sg,si)=>{const d=occBySG[sg];tR+=d.req;tS+=d.sch;tA+=d.act;const e=si%2===0?'bg-white':'bg-slate-50/40';
+      h+=`<tr class="${e}"><td class="px-4 py-2.5 font-semibold text-slate-700 text-xs font-mono">${sg}</td><td class="px-4 py-2.5 text-right font-mono">${d.req.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${d.sch.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${d.act.toLocaleString()}</td><td class="px-4 py-2.5 text-right">${d.shr.toFixed(1)}%</td><td class="px-4 py-2.5 text-right">${d.util.toFixed(1)}%</td><td class="px-4 py-2.5 text-right">${d.occ.toFixed(1)}%</td></tr>`;
+    });
+    h+=`<tr class="bg-slate-100 font-semibold border-t-2 border-slate-300"><td class="px-4 py-2.5 text-slate-700">Total / Avg</td><td class="px-4 py-2.5 text-right font-mono">${tR.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${tS.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${tA.toLocaleString()}</td><td class="px-4 py-2.5 text-right">—</td><td class="px-4 py-2.5 text-right">—</td><td class="px-4 py-2.5 text-right">—</td></tr>`;
+    tbody.innerHTML=h;
+  }
+}
+
+// ============================================================
+// EXPERT SCHEDULE AUDIT DATA
+// ============================================================
+const expertAuditData = {
+  sarah: {
+    name:'Sarah M.', emp:'EMP-10482', partner:'INTUIT', shift:'8:00 AM – 4:30 PM',
+    shiftLeft:'25%', shiftWidth:'52%',
+    kpis:[
+      {label:'Total Changes',val:'5',color:'text-slate-800'},
+      {label:'Overlays Added',val:'2',color:'text-green-600'},
+      {label:'Overlays Edited',val:'2',color:'text-blue-600'},
+      {label:'Overlays Removed',val:'1',color:'text-red-600'},
+    ],
+    events:[
+      {time:'2:14 PM',action:'edit',   actor:'wfm.scheduler@intuit.com',  field:'Shift End Time',          before:'5:00 PM',      after:'4:30 PM',      reason:'Coverage surplus at peak hours resolved'},
+      {time:'1:47 PM',action:'add',    actor:'wfm.scheduler@intuit.com',  field:'Planned Time Off Overlay', before:'—',            after:'1:00–2:00 PM', reason:'Approved PTO request submitted same-day'},
+      {time:'11:22 AM',action:'edit',  actor:'supervisor.jones@intuit.com',field:'Lunch Overlay',           before:'1:00–1:30 PM', after:'12:00–12:30 PM',reason:'Staggered lunch scheduling per WG policy'},
+      {time:'10:05 AM',action:'add',   actor:'wfm.scheduler@intuit.com',  field:'Work Segment',            before:'—',            after:'6:00–8:00 PM', reason:'Backfill for absent colleague EMP-10391'},
+      {time:'7:01 AM', action:'remove',actor:'wfm.scheduler@intuit.com',  field:'Training Overlay',        before:'5:00–6:00 PM', after:'—',            reason:'Training session cancelled; rescheduled for following week'},
+    ]
+  },
+  james: {
+    name:'James T.', emp:'EMP-10391', partner:'INTUIT', shift:'9:00 AM – 5:30 PM',
+    shiftLeft:'31%', shiftWidth:'52%',
+    kpis:[
+      {label:'Total Changes',val:'3',color:'text-slate-800'},
+      {label:'Shifts Added',val:'0',color:'text-green-600'},
+      {label:'Shifts Edited',val:'2',color:'text-blue-600'},
+      {label:'Shifts Removed',val:'1',color:'text-red-600'},
+    ],
+    events:[
+      {time:'3:15 PM',action:'remove',actor:'wfm.scheduler@intuit.com', field:'Shift',         before:'9:00–5:30 PM',after:'—',          reason:'Unplanned absence — sick leave reported'},
+      {time:'8:50 AM',action:'edit',  actor:'wfm.scheduler@intuit.com', field:'Shift Start',   before:'8:30 AM',     after:'9:00 AM',    reason:'Adjusted for commute accommodation'},
+      {time:'7:30 AM',action:'edit',  actor:'wfm.auto-assign',          field:'Queue Assignment',before:'SBG_US_OL', after:'CTG_US_DE',  reason:'Dynamic queue rebalancing'},
+    ]
+  },
+  priya: {
+    name:'Priya K.', emp:'EMP-10554', partner:'JDA', shift:'7:00 AM – 3:30 PM',
+    shiftLeft:'10%', shiftWidth:'52%',
+    kpis:[
+      {label:'Total Changes',val:'4',color:'text-slate-800'},
+      {label:'Shifts Added',val:'2',color:'text-green-600'},
+      {label:'Shifts Edited',val:'2',color:'text-blue-600'},
+      {label:'Shifts Removed',val:'0',color:'text-red-600'},
+    ],
+    events:[
+      {time:'2:05 PM',action:'add',  actor:'wfm.scheduler@intuit.com', field:'Overtime Block',  before:'—',         after:'3:30–4:30 PM',reason:'Extended peak demand'},
+      {time:'11:10 AM',action:'edit',actor:'supervisor.patel@jda.com',  field:'Lunch Break',    before:'12:30 PM',  after:'12:00 PM',    reason:'Staggered breaks per WG policy'},
+      {time:'9:00 AM', action:'edit',actor:'wfm.auto-assign',           field:'Tier',           before:'Tier 1',    after:'Tier 2',      reason:'Certified T2 following qualification'},
+      {time:'6:45 AM', action:'add', actor:'wfm.scheduler@intuit.com',  field:'Pre-shift Wrap', before:'—',         after:'6:45–7:00 AM',reason:'Onboarding checklist requirement'},
+    ]
+  },
+  carlos: {
+    name:'Carlos R.', emp:'EMP-10228', partner:'MAGNIT', shift:'10:00 AM – 6:30 PM',
+    shiftLeft:'40%', shiftWidth:'52%',
+    kpis:[
+      {label:'Total Changes',val:'2',color:'text-slate-800'},
+      {label:'Shifts Added',val:'0',color:'text-green-600'},
+      {label:'Shifts Edited',val:'2',color:'text-blue-600'},
+      {label:'Shifts Removed',val:'0',color:'text-red-600'},
+    ],
+    events:[
+      {time:'12:30 PM',action:'edit',actor:'wfm.scheduler@intuit.com', field:'Shift End Time',  before:'7:00 PM',after:'6:30 PM',reason:'Schedule compressed; REQ dropped'},
+      {time:'9:45 AM', action:'edit',actor:'wfm.auto-assign',          field:'Queue Assignment',before:'CTG_US_SE',after:'CTG_US_DE',reason:'Auto-rebalance'},
+    ]
+  }
+};
+
+function buildExpertAudit() {
+  const expertKey = document.getElementById('expert-select').value;
+  const d = expertAuditData[expertKey];
+  // KPIs
+  const kpiEl = document.getElementById('expert-audit-kpis');
+  kpiEl.innerHTML = d.kpis.map(k=>`<div class="kpi-card text-center"><div class="text-3xl font-bold ${k.color}">${k.val}</div><div class="text-xs text-slate-500 mt-1">${k.label}</div></div>`).join('');
+  // Shift bar
+  document.getElementById('expert-shift-bar-title').textContent = `Scheduled Shift — ${d.name} · Apr 22, 2025`;
+  const bar = document.getElementById('expert-shift-bar');
+  bar.style.left = d.shiftLeft; bar.style.width = d.shiftWidth;
+  bar.textContent = d.shift;
+  // Timeline
+  const tl = document.getElementById('expert-audit-timeline');
+  const actionMeta = {
+    add:    {dot:'audit-dot-add',    badge:'audit-action-add',    icon:'＋', label:'Added'},
+    edit:   {dot:'audit-dot-edit',   badge:'audit-action-edit',   icon:'✎',  label:'Edited'},
+    remove: {dot:'audit-dot-remove', badge:'audit-action-remove', icon:'✕',  label:'Removed'},
+  };
+  tl.innerHTML = '<div class="audit-timeline-line"></div>' + d.events.map((ev,i)=>{
+    const m = actionMeta[ev.action];
+    return `<div class="relative mb-6 last:mb-0">
+      <div class="absolute -left-[44px] w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm z-10 ${m.dot}" style="top:0px">${m.icon}</div>
+      <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+        <div class="flex items-start justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs px-2 py-0.5 rounded font-semibold ${m.badge}">${m.label}</span>
+            <span class="font-semibold text-slate-800 text-sm">${ev.field}</span>
+          </div>
+          <span class="text-xs text-slate-400 whitespace-nowrap ml-4">${ev.time}</span>
+        </div>
+        <div class="flex items-center gap-2 text-sm mb-2">
+          ${ev.before !== '—' ? `<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-xs">${ev.before}</span><span class="text-slate-400">→</span>` : ''}
+          ${ev.after !== '—' ? `<span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono text-xs font-semibold">${ev.after}</span>` : `<span class="bg-red-50 text-red-600 px-2 py-0.5 rounded text-xs">Removed</span>`}
+        </div>
+        <div class="text-xs text-slate-500 flex items-center gap-3">
+          <span>👤 <strong class="text-slate-600">${ev.actor}</strong></span>
+          <span class="text-slate-300">|</span>
+          <span>📝 ${ev.reason}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// OCC CHART
+// ============================================================
+let occMetric = 'util';
+
+function setOccMetric(m) {
+  occMetric = m;
+  ['shr','util','occ'].forEach(x => document.getElementById('occ-metric-'+x)?.classList.toggle('active', x===m));
+  renderOccChart();
+}
+
+function renderOccChart() {
+  destroyChart('occChart');
+  const ctx = document.getElementById('occChart');
+  if (!ctx) return;
+
+  const metaMap = {
+    shr:  { label:'Shrinkage %',   color:'#8b5cf6' },
+    util: { label:'Utilization %', color:'#2563eb' },
+    occ:  { label:'Occupancy %',   color:'#f59e0b' },
+  };
+  const m = metaMap[occMetric];
+  const pf = document.getElementById('occ-partner-filter')?.value || '';
+
+  let labels, datasets;
+
+  if (occPivot === 'partner') {
+    const partners = ['INTUIT','JDA','MAGNIT'].filter(p => !pf || p===pf);
+    labels = partners;
+    datasets = [{
+      label: m.label,
+      data: partners.map(p => occPartners[p][occMetric]),
+      backgroundColor: partners.map(() => m.color + '33'),
+      borderColor: m.color,
+      borderWidth: 2,
+      borderRadius: 6,
+    }];
+    document.getElementById('occ-chart-label').textContent = `${m.label} — By Partner`;
+    charts['occChart'] = new Chart(ctx, {
+      type:'bar',
+      data:{labels, datasets},
+      options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11}}},y:{ticks:{font:{size:10},callback:v=>v+'%'},min:0,max:120}}}
+    });
+
+  } else if (occPivot === 'date') {
+    const partners = ['INTUIT','JDA','MAGNIT'].filter(p => !pf || p===pf);
+    labels = occDates;
+    datasets = partners.map((p,pi) => ({
+      label: p,
+      data: occByDate[p].map(v => v[occMetric]),
+      borderColor: ['#2563eb','#16a34a','#f59e0b'][pi],
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      borderWidth: 2,
+      pointRadius: 3,
+    }));
+    document.getElementById('occ-chart-label').textContent = `${m.label} — By Date`;
+    charts['occChart'] = new Chart(ctx, {
+      type:'line',
+      data:{labels, datasets},
+      options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:11}}}},scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10},callback:v=>v+'%'},min:0}}}
+    });
+
+  } else {
+    // By Staff Group
+    labels = staffGroups;
+    datasets = [{
+      label: m.label,
+      data: staffGroups.map(sg => occBySG[sg][occMetric]),
+      backgroundColor: m.color + '33',
+      borderColor: m.color,
+      borderWidth: 2,
+      borderRadius: 6,
+    }];
+    document.getElementById('occ-chart-label').textContent = `${m.label} — By Staff Group`;
+    charts['occChart'] = new Chart(ctx, {
+      type:'bar',
+      data:{labels: staffGroups.map(s=>s.length>20?s.slice(0,20)+'…':s), datasets},
+      options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:10},callback:v=>v+'%'},min:0,max:120}}}
+    });
+  }
+}
+
+// Override setOccPivot to also re-render chart and update breaches
+function setOccPivot(p){
+  occPivot=p;
+  ['partner','date','staffgroup'].forEach(x=>document.getElementById('occ-pivot-'+x.replace('staffgroup','sg')).classList.toggle('active',x===p));
+  renderOccTable();
+  renderOccChart();
+  updateOccBreaches();
+}
+
+// ============================================================
+// WG SCHEDULE AUDIT — DATE / WHO / WHY DATA
+// ============================================================
+const wgAuditLog = [
+  {
+    date:'Apr 22, 2025', total:28, add:6, edit:17, remove:5,
+    coverageImpact: '−12 HC net (understaffed)',
+    actors:[
+      { role:'System-Driven', count:11, add:4, edit:6, remove:1,
+        detail:'Auto-rebalance triggered by REQ gap at 9:00–10:30 intervals. 4 experts moved from SBG_US to CTG_US_DE.' },
+      { role:'Manager',       count:9,  add:2, edit:6, remove:1,
+        detail:'Supervisor Jones and Supervisor Patel made adjustments to stagger lunch breaks and backfill 2 sick-call absences.' },
+      { role:'Admin',         count:6,  add:0, edit:4, remove:2,
+        reasons:[
+          {reason:'Voluntary Time Off (VTO) approval',         count:2, impact:'−2 HC · 12:00–14:00'},
+          {reason:'Compliance — mandatory break regulation',    count:2, impact:'Shift shortened 30 min'},
+          {reason:'Skill downgrade — Tier 2 to Tier 1',        count:1, impact:'Moved to different queue'},
+          {reason:'Shift swap approved between two experts',    count:1, impact:'Neutral — no HC change'},
+        ]},
+      { role:'Expert',        count:2,  add:0, edit:1, remove:1,
+        detail:'1 self-service availability update. 1 no-show resulted in shift removal.' },
+    ]
+  },
+  {
+    date:'Apr 21, 2025', total:22, add:3, edit:15, remove:4,
+    coverageImpact: '−8 HC net (understaffed)',
+    actors:[
+      { role:'System-Driven', count:9, add:2, edit:6, remove:1,
+        detail:'Dynamic queue reassignment during 08:30–10:00 surge. 2 experts added from standby pool.' },
+      { role:'Manager',       count:7, add:1, edit:5, remove:1,
+        detail:'Backfill scheduling for 2 absences. 1 shift extended 1 hr to cover peak.' },
+      { role:'Admin',         count:4, add:0, edit:3, remove:1,
+        reasons:[
+          {reason:'PTO approved day-of',                        count:1, impact:'−1 HC · Full day'},
+          {reason:'Onboarding overlap — new hire briefing',     count:1, impact:'1 hr non-productive'},
+          {reason:'Training rescheduled to this date',          count:2, impact:'2 experts in training 1–3 PM'},
+        ]},
+      { role:'Expert',        count:2, add:0, edit:1, remove:1,
+        detail:'1 shift swap request. 1 late cancellation.' },
+    ]
+  },
+  {
+    date:'Apr 20, 2025', total:18, add:5, edit:10, remove:3,
+    coverageImpact: '+4 HC net (slight overstaffed)',
+    actors:[
+      { role:'System-Driven', count:7, add:3, edit:4, remove:0,
+        detail:'Proactive adds from standby pool ahead of forecast demand spike at 10:00–12:00.' },
+      { role:'Manager',       count:6, add:2, edit:3, remove:1,
+        detail:'Added 2 overtime blocks. Removed 1 expert reassigned to different WG.' },
+      { role:'Admin',         count:3, add:0, edit:2, remove:1,
+        reasons:[
+          {reason:'Correcting data entry error from prior day',  count:1, impact:'Time correction only'},
+          {reason:'Accommodation adjustment — modified schedule', count:1, impact:'Shift shortened 1 hr'},
+          {reason:'Involuntary removal — policy violation',       count:1, impact:'−1 HC · Full day'},
+        ]},
+      { role:'Expert',        count:2, add:0, edit:1, remove:1,
+        detail:'1 availability preference update. 1 no-show.' },
+    ]
+  },
+  {
+    date:'Apr 19, 2025', total:15, add:4, edit:9, remove:2,
+    coverageImpact: 'Balanced (within ±2 HC)',
+    actors:[
+      { role:'System-Driven', count:6, add:2, edit:4, remove:0,
+        detail:'Routine auto-rebalance at start of week. No coverage impact.' },
+      { role:'Manager',       count:5, add:2, edit:3, remove:0,
+        detail:'Added 2 weekend carryover extensions. Minor break adjustments.' },
+      { role:'Admin',         count:3, add:0, edit:2, remove:1,
+        reasons:[
+          {reason:'FMLA documentation — partial day leave',     count:1, impact:'−0.5 HC equivalent'},
+          {reason:'Skill upgrade applied — Tier 1 to Tier 2',   count:2, impact:'Queue reassignment'},
+        ]},
+      { role:'Expert',        count:1, add:0, edit:0, remove:1,
+        detail:'Personal leave self-submitted.' },
+    ]
+  },
+  {
+    date:'Apr 18, 2025', total:12, add:2, edit:8, remove:2,
+    coverageImpact: '−6 HC net (understaffed)',
+    actors:[
+      { role:'System-Driven', count:4, add:1, edit:3, remove:0,
+        detail:'Queue rebalancing between CTG and SBG workgroups.' },
+      { role:'Manager',       count:4, add:1, edit:2, remove:1,
+        detail:'1 shift extended. 1 expert swapped workgroups. 1 shift removed (early release).' },
+      { role:'Admin',         count:3, add:0, edit:2, remove:1,
+        reasons:[
+          {reason:'Voluntary Time Off batch approval',          count:2, impact:'−2 HC · 14:00–close'},
+          {reason:'Late start accommodation',                   count:1, impact:'Shift start moved +1 hr'},
+        ]},
+      { role:'Expert',        count:1, add:0, edit:1, remove:0,
+        detail:'Availability window narrowed by 1 hr.' },
+    ]
+  },
+];
+
+function buildWGAudit() {
+  const log = document.getElementById('wg-audit-log');
+  if (!log) return;
+
+  let html = '';
+  wgAuditLog.forEach((day, di) => {
+    const isFirst = di === 0;
+    const coverageColor = day.coverageImpact.startsWith('+') ? 'text-amber-600' :
+                          day.coverageImpact.startsWith('−') ? 'text-red-600' : 'text-green-600';
+    html += `
+    <div class="border-b border-slate-100 last:border-0">
+      <!-- Date row header — always visible, clickable to expand -->
+      <div class="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors" onclick="toggleWGDay('day-${di}', this)">
+        <div class="flex items-center gap-4">
+          <div class="w-5 text-slate-400 text-xs font-mono transition-transform" id="chevron-day-${di}">${isFirst?'▼':'▶'}</div>
+          <div>
+            <span class="font-semibold text-slate-800 text-sm">${day.date}</span>
+            <span class="text-xs text-slate-400 ml-2">${day.total} total changes</span>
+          </div>
+          <!-- Mini bar -->
+          <div class="flex gap-0.5 h-4 items-center ml-2">
+            ${day.add>0?`<div class="rounded-sm" style="width:${day.add*4}px;height:14px;background:#16a34a;opacity:0.8" title="${day.add} added"></div>`:''}
+            ${day.edit>0?`<div class="rounded-sm" style="width:${day.edit*4}px;height:14px;background:#2563eb;opacity:0.8" title="${day.edit} edited"></div>`:''}
+            ${day.remove>0?`<div class="rounded-sm" style="width:${day.remove*4}px;height:14px;background:#dc2626;opacity:0.8" title="${day.remove} removed"></div>`:''}
+          </div>
+          <span class="text-xs font-semibold ${coverageColor}">${day.coverageImpact}</span>
+        </div>
+        <div class="flex items-center gap-4 text-xs text-slate-400">
+          <span class="text-green-600 font-semibold">+${day.add}</span>
+          <span class="text-blue-600 font-semibold">~${day.edit}</span>
+          <span class="text-red-600 font-semibold">−${day.remove}</span>
+        </div>
+      </div>
+
+      <!-- Expanded content — WHO breakdown -->
+      <div id="day-${di}" style="${isFirst?'':'display:none'}" class="bg-slate-50/50 border-t border-slate-100">
+        ${day.actors.map((actor, ai) => {
+          const roleColors = {
+            'System-Driven': {bg:'bg-purple-50', border:'border-purple-200', dot:'bg-purple-500', text:'text-purple-700'},
+            'Manager':       {bg:'bg-blue-50',   border:'border-blue-200',   dot:'bg-blue-500',   text:'text-blue-700'},
+            'Admin':         {bg:'bg-amber-50',  border:'border-amber-200',  dot:'bg-amber-500',  text:'text-amber-700'},
+            'Expert':        {bg:'bg-slate-50',  border:'border-slate-200',  dot:'bg-slate-400',  text:'text-slate-600'},
+          };
+          const c = roleColors[actor.role] || roleColors['Expert'];
+          const isAdmin = actor.role === 'Admin';
+
+          return `
+          <div class="mx-4 my-2 rounded-lg border ${c.border} overflow-hidden">
+            <!-- Role header -->
+            <div class="px-4 py-2.5 flex items-center justify-between ${c.bg} ${isAdmin ? 'cursor-pointer hover:opacity-90' : ''}"
+                 ${isAdmin ? `onclick="toggleWGAdmin('admin-${di}-${ai}', this)"` : ''}>
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full ${c.dot} inline-block"></span>
+                <span class="font-semibold text-sm ${c.text}">${actor.role}</span>
+                <span class="text-xs text-slate-400">${actor.count} change${actor.count!==1?'s':''}</span>
+              </div>
+              <div class="flex items-center gap-3 text-xs">
+                ${actor.add>0?`<span class="text-green-600 font-medium">+${actor.add} added</span>`:''}
+                ${actor.edit>0?`<span class="text-blue-600 font-medium">${actor.edit} edited</span>`:''}
+                ${actor.remove>0?`<span class="text-red-600 font-medium">−${actor.remove} removed</span>`:''}
+                ${isAdmin ? `<span id="admin-chevron-${di}-${ai}" class="text-slate-400 text-xs ml-1">▶ Reasons</span>` : ''}
+              </div>
+            </div>
+            <!-- Admin reasons only; no detail text for other roles -->
+            ${isAdmin ? `
+              <div id="admin-${di}-${ai}" style="display:none" class="bg-white">
+                <div class="px-4 py-2 border-b border-slate-100">
+                  <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Admin Change Reasons</span>
+                </div>
+                <table class="w-full text-xs">
+                  <thead><tr class="bg-slate-50 text-slate-400 uppercase">
+                    <th class="px-4 py-2 text-left">Reason (Sample)</th>
+                    <th class="px-4 py-2 text-right">Count</th>
+                    <th class="px-4 py-2 text-right">Staffing Impact</th>
+                  </tr></thead>
+                  <tbody>
+                    ${actor.reasons.map((r,ri) => `
+                    <tr class="${ri%2===0?'bg-white':'bg-slate-50/40'}">
+                      <td class="px-4 py-2 text-slate-700">${r.reason}</td>
+                      <td class="px-4 py-2 text-right font-semibold text-slate-600">${r.count}</td>
+                      <td class="px-4 py-2 text-right text-slate-500">${r.impact}</td>
+                    </tr>`).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+  log.innerHTML = html;
+  buildWGAuditHeatmap();
+}
+
+function toggleWGDay(id, header) {
+  const el = document.getElementById(id);
+  const chevron = document.getElementById('chevron-' + id);
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  if (chevron) chevron.textContent = open ? '▶' : '▼';
+}
+
+function toggleWGAdmin(id, header) {
+  const el = document.getElementById(id);
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  // Update the reasons chevron
+  const parts = id.split('-'); // admin-di-ai
+  const chevron = document.getElementById(`admin-chevron-${parts[1]}-${parts[2]}`);
+  if (chevron) chevron.textContent = open ? '▶ Reasons' : '▼ Reasons';
+}
+
+function buildWGAuditHeatmap() {
+  const el = document.getElementById('wg-audit-heatmap');
+  if (!el) return;
+  // sample change intensity per interval
+  const intensity = [2,3,4,5,9,14,18,20,22,21,19,17,16,15,12,10,9,8,6,5,4,3,2,2,1,1,1,1,0,0];
+  const max = Math.max(...intensity);
+  el.innerHTML = intervals.map((intv,i) => {
+    const pct = intensity[i]/max;
+    const alpha = (0.05 + pct*0.9).toFixed(2);
+    return `<div title="${intv}: ${intensity[i]} changes" class="rounded cursor-default" style="width:28px;height:32px;background:rgba(37,99,235,${alpha});flex-shrink:0" ></div>`;
+  }).join('');
+}
+
+// ============================================================
+// STAFFING ADJ TABLE
+// ============================================================
+const planScheduleRows = [
+  {time:'6:30-7:00',  totalHC:19, adjRule:'3.5 hrs', calc:26.505, sync:27,  pctDiff:'1.83%'},
+  {time:'7:00-7:30',  totalHC:24, adjRule:'3.5 hrs', calc:33.48,  sync:36,  pctDiff:'7.00%'},
+  {time:'7:30-8:00',  totalHC:29, adjRule:'3.5 hrs', calc:40.455, sync:41,  pctDiff:'1.33%'},
+  {time:'8:00-8:30',  totalHC:33, adjRule:'3.5 hrs', calc:46.035, sync:50,  pctDiff:'7.93%'},
+  {time:'8:30-9:00',  totalHC:36, adjRule:'3.5 hrs', calc:50.22,  sync:54,  pctDiff:'7.00%'},
+  {time:'9:00-9:30',  totalHC:38, adjRule:'3.5 hrs', calc:53.01,  sync:54,  pctDiff:'1.83%'},
+  {time:'9:30-10:00', totalHC:38, adjRule:'3.5 hrs', calc:53.01,  sync:54,  pctDiff:'1.83%'},
+  {time:'10:00-10:30',totalHC:40, adjRule:'3.5 hrs', calc:55.8,   sync:59,  pctDiff:'5.42%'},
+  {time:'10:30-11:00',totalHC:40, adjRule:'3.5 hrs', calc:55.8,   sync:59,  pctDiff:'5.42%'},
+  {time:'11:00-11:30',totalHC:41, adjRule:'3.5 hrs', calc:57.195, sync:59,  pctDiff:'3.06%'},
+];
+function buildStaffingAdjTable(){
+  const tb=document.getElementById('staffingAdjTable');if(!tb)return;
+  tb.innerHTML=planScheduleRows.map((row,i)=>{
+    const e=i%2===0?'bg-white':'bg-slate-50/40';const h=parseFloat(row.pctDiff)>6;
+    return `<tr class="${e}"><td class="px-3 py-2 text-slate-600 font-mono text-xs">${row.time}</td><td class="px-3 py-2 text-right">${row.totalHC}</td><td class="px-3 py-2 text-right text-slate-600">${row.adjRule}</td><td class="px-3 py-2 text-right font-mono">${row.calc}</td><td class="px-3 py-2 text-right font-mono font-semibold">${row.sync}</td><td class="px-3 py-2 text-right ${h?'text-amber-700 font-semibold':'text-slate-500'}">${row.pctDiff}</td></tr>`;
+  }).join('');
+}
+
+// ============================================================
+// WATERFALL
+// ============================================================
+const waterfallStages=[
+  {label:'Baseline Adjusted Productive Hours', hc:468, color:'#3b82f6', note:'Risk Tolerance (12.5%) + Allocated Hours applied'},
+  {label:'Reallocated Hours',                  hc:454, color:'#6366f1', note:'Supply Soft Inputs applied (10%)'},
+  {label:'Bounded Hours',                      hc:454, color:'#8b5cf6', note:'Min/Max HC applied — not binding at this interval'},
+  {label:'Total Staffing Hours',               hc:631, color:'#ec4899', note:'Shrinkage applied (28.0%, ÷ 0.72)'},
+  {label:'Throttled Hours',                    hc:454, color:'#f97316', note:'Throttling applied (−28%)'},
+  {label:'Adjusted Hours',                     hc:337, color:'#10b981', note:'Alt Source Adjustments applied'},
+  {label:'Final Requirement',                  hc:337, color:'#0d9488', note:'Output used for scheduling'},
+];
+function buildWaterfallBars(){
+  const tb=document.getElementById('waterfallBars');if(!tb)return;
+  const mx=Math.max(...waterfallStages.map(s=>s.hc));
+  tb.innerHTML=waterfallStages.map((s,i)=>`<div>
+    <div class="flex items-center justify-between text-xs mb-1"><span class="text-slate-600 font-medium">${i+1}. ${s.label}</span><span class="font-bold text-slate-800">${s.hc} HC</span></div>
+    <div class="bg-slate-100 rounded-full h-7 overflow-hidden"><div class="h-full rounded-full flex items-center px-3 text-white text-xs font-semibold waterfall-bar" style="width:${(s.hc/mx*100).toFixed(1)}%;background:${s.color};">${s.hc}</div></div>
+    <div class="text-xs text-slate-400 mt-0.5">${s.note}</div>
+  </div>`).join('');
+}
+
+// ============================================================
+// THRESHOLD HELPERS
+// ============================================================
+function getThresholds() {
+  return {
+    schOver:  parseFloat(document.getElementById('thresh-sch-over')?.value  ?? 2),
+    schUnder: parseFloat(document.getElementById('thresh-sch-under')?.value ?? 2),
+    actCrit:  parseFloat(document.getElementById('thresh-act-crit')?.value  ?? 90) / 100,
+    actGap:   parseFloat(document.getElementById('thresh-act-gap')?.value   ?? 95) / 100,
+  };
+}
+
+function toggleThresholdPanel() {
+  const p = document.getElementById('threshold-panel');
+  const btn = document.getElementById('threshold-toggle-btn');
+  const open = p.style.display === 'none';
+  p.style.display = open ? 'block' : 'none';
+  btn.style.background = open ? '#eff6ff' : '';
+  btn.style.borderColor = open ? '#93c5fd' : '';
+  btn.style.color = open ? '#1d4ed8' : '';
+}
+
+// Active breach filter: null | 'schOver' | 'schUnder' | 'actCrit' | 'actGap' | 'ok'
+let activeBreachFilter = null;
+
+
+// ============================================================
+// MULTI-SG DATA (sample data for each staff group to power aggregate drill-down)
+// ============================================================
+const sgMeta = {
+  ctg1: { label:'CTG_US_DE_FS_PROF1_EN',      bu:'CG',    reqFactor:1.00, schFactor:0.975, actFactor:0.96 },
+  sbg1: { label:'SBG_US_OL_AGGOLD_EN_PHN_SG', bu:'SBSEG', reqFactor:0.82, schFactor:1.04,  actFactor:0.88 },
+  ctg2: { label:'CTG_US_SE_FS_PROF2_EN',       bu:'CG',    reqFactor:0.65, schFactor:0.94,  actFactor:0.95 },
+  sbg2: { label:'SBG_US_DE_AGGOLD_EN_CHA_SG',  bu:'SBSEG', reqFactor:0.71, schFactor:1.06,  actFactor:0.91 },
+};
+
+function getSGsForCurrentFilter() {
+  const sgFilter = document.getElementById('ars-sg-filter')?.value || 'all';
+  const buFilter = document.getElementById('ars-bu-filter')?.value || '';
+  return Object.entries(sgMeta)
+    .filter(([k, v]) => (sgFilter === 'all' || sgFilter === k) && (!buFilter || v.bu === buFilter))
+    .map(([k, v]) => ({ key: k, ...v }));
+}
+
+function computeSGBreaches(sg) {
+  const thresh = getThresholds();
+  const rows = intervals.map((_, i) => {
+    const r = Math.round(requiredHC[i] * sg.reqFactor);
+    const s = Math.round(r * sg.schFactor * scheduledHC[i]/requiredHC[i]);
+    const a = Math.round(s * sg.actFactor);
+    const schDiff = (s/r*100) - 100;
+    const actRatio = a/s;
+    let schStatus = 'ok';
+    if (schDiff > thresh.schOver) schStatus = 'schOver';
+    else if (schDiff < -thresh.schUnder) schStatus = 'schUnder';
+    let actStatus = 'ok';
+    if (actRatio < thresh.actCrit) actStatus = 'actCrit';
+    else if (actRatio < thresh.actGap) actStatus = 'actGap';
+    return { label: intervals[i], schDiff, actPct: (actRatio*100), schStatus, actStatus };
+  });
+  return rows;
+}
+
+// ============================================================
+// NAV
+// ============================================================
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const el=document.getElementById('view-'+id);
+  if(el) el.classList.add('active');
+  const crumbs={'ai-engine':'AI Observability Engine','alerts':'Proactive Alerts','act-req-sch':'Actual vs REQ vs SCH','occ-util-shr':'OCC / UTIL / SHR','staffing-adj':'Staffing Adjustments','plan-schedule-impacts':'New Plan / Schedule Impacts','pop-outputs':'Plan over Plan Outputs','pop-inputs':'Plan over Plan Inputs','wg-audit':'WG Schedule Audit','expert-audit':'Expert Schedule Audit'};
+  document.getElementById('breadcrumb').textContent=crumbs[id]||id;
+  document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')?.includes(`'${id}'`))n.classList.add('active');});
+  if(id==='act-req-sch')refreshARSView();
+  else if(id==='occ-util-shr'){renderOccTable();setTimeout(renderOccChart,50);}
+  else if(id==='pop-outputs'){buildPOPOutputs();setTimeout(initPopCharts,50);}
+  else if(id==='pop-inputs'){buildPOPInputs();}
+  else if(id==='plan-schedule-impacts'){buildPSI();setTimeout(initPSIChart,50);}
+  else if(id==='expert-audit'){buildExpertAudit();}
+  else if(id==='wg-audit'){buildWGAudit();setTimeout(initWGCharts,50);}
+  else setTimeout(initCharts,50);
+}
+
+// ============================================================
+// ARS
+// ============================================================
+function setGranularity(g){currentGranularity=g;['interval','day','week','month'].forEach(x=>document.getElementById('toggle-'+x).classList.toggle('active',x===g));refreshARSView();}
+function togglePartnerBreakdown(){showPartners=!showPartners;const b=document.getElementById('partner-toggle-btn');b.textContent=showPartners?'On':'Off';b.classList.toggle('active',showPartners);refreshARSView();}
+
+function refreshARSView(){
+  const thresh = getThresholds();
+  buildARSTable();
+  updateBreachSummary();
+  destroyChart('actReqSch');
+  const ctx=document.getElementById('actReqSchChart');if(!ctx)return;
+  let lbl,req,sch,act,gl;
+  if(currentGranularity==='interval'){lbl=intervals;req=requiredHC;sch=scheduledHC;act=actualHC;gl='30-min intervals';}
+  else if(currentGranularity==='day'){lbl=dayLabels;req=dayRequired;sch=dayScheduled;act=dayActual;gl='Daily';}
+  else if(currentGranularity==='week'){lbl=weekLabels;req=weekRequired;sch=weekScheduled;act=weekActual;gl='Weekly';}
+  else{lbl=monthLabels;req=monthRequired;sch=monthScheduled;act=monthActual;gl='Monthly';}
+  document.getElementById('ars-chart-label').textContent=`CTG_US_DE_FS_PROF1_EN · 3/1/2025 · ${gl}`;
+  document.getElementById('col-period-header').textContent={interval:'Interval',day:'Date',week:'Week',month:'Month'}[currentGranularity];
+  document.getElementById('ars-table-label').textContent=`${gl} Detail — Gap Analysis`;
+  charts['actReqSch']=new Chart(ctx,{type:'line',data:{labels:lbl,datasets:[
+    {label:'Required HC',data:req,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,0.06)',tension:0.3,borderWidth:2,pointRadius:0},
+    {label:'Scheduled HC',data:sch,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.06)',tension:0.3,borderWidth:2,borderDash:[4,2],pointRadius:0},
+    {label:'Actual HC',data:act,borderColor:'#f59e0b',tension:0.3,borderWidth:2,pointRadius:0,fill:false},
+  ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:11}}}},scales:{x:{ticks:{font:{size:10},maxTicksLimit:16}},y:{ticks:{font:{size:10}},title:{display:true,text:'Headcount',font:{size:10}}}}}});
+}
+
+function updateBreachSummary() {
+  const thresh = getThresholds();
+  let lbl, req, sch, act;
+  if(currentGranularity==='interval'){lbl=intervals;req=requiredHC;sch=scheduledHC;act=actualHC;}
+  else if(currentGranularity==='day'){lbl=dayLabels;req=dayRequired;sch=dayScheduled;act=dayActual;}
+  else if(currentGranularity==='week'){lbl=weekLabels;req=weekRequired;sch=weekScheduled;act=weekActual;}
+  else{lbl=monthLabels;req=monthRequired;sch=monthScheduled;act=monthActual;}
+
+  let schOverCt=0, schUnderCt=0, actCritCt=0, actGapCt=0, okCt=0;
+  lbl.forEach((_,i) => {
+    const sd = (sch[i]/req[i]*100)-100;
+    const ar = act[i]/sch[i];
+    const isSchOver  = sd > thresh.schOver;
+    const isSchUnder = sd < -thresh.schUnder;
+    const isActCrit  = ar < thresh.actCrit;
+    const isActGap   = ar < thresh.actGap && !isActCrit;
+    if (isSchOver) schOverCt++;
+    if (isSchUnder) schUnderCt++;
+    if (isActCrit) actCritCt++;
+    if (isActGap) actGapCt++;
+    if (!isSchOver && !isSchUnder && !isActCrit && !isActGap) okCt++;
+  });
+
+  document.getElementById('chip-sch-over-count').textContent = schOverCt;
+  document.getElementById('chip-sch-under-count').textContent = schUnderCt;
+  document.getElementById('chip-act-crit-count').textContent = actCritCt;
+  document.getElementById('chip-act-gap-count').textContent = actGapCt;
+  document.getElementById('chip-ok-count').textContent = okCt;
+
+  // Active chip highlighting
+  ['chip-sch-over','chip-sch-under','chip-act-crit','chip-act-gap','chip-ok'].forEach(id => {
+    document.getElementById(id)?.classList.remove('active');
+  });
+  const chipMap = {schOver:'chip-sch-over',schUnder:'chip-sch-under',actCrit:'chip-act-crit',actGap:'chip-act-gap',ok:'chip-ok'};
+  if (activeBreachFilter && chipMap[activeBreachFilter]) {
+    document.getElementById(chipMap[activeBreachFilter])?.classList.add('active');
+  }
+
+  // Filter label
+  const labelMap = {schOver:'Showing: SCH Over threshold only',schUnder:'Showing: SCH Under threshold only',actCrit:'Showing: ACT Critical only',actGap:'Showing: ACT Gap only',ok:'Showing: Within threshold only'};
+  document.getElementById('breach-filter-label').textContent = activeBreachFilter ? labelMap[activeBreachFilter] : '';
+  document.getElementById('clear-breach-filter').style.display = activeBreachFilter ? 'inline' : 'none';
+
+  // Update threshold labels in legend area dynamically
+  // (chips already reflect live counts)
+}
+
+function buildARSTable(){
+  const tb=document.getElementById('arsTable');if(!tb)return;
+  const thresh = getThresholds();
+  let lbl,req,sch,act;
+  if(currentGranularity==='interval'){lbl=intervals;req=requiredHC;sch=scheduledHC;act=actualHC;}
+  else if(currentGranularity==='day'){lbl=dayLabels;req=dayRequired;sch=dayScheduled;act=dayActual;}
+  else if(currentGranularity==='week'){lbl=weekLabels;req=weekRequired;sch=weekScheduled;act=weekActual;}
+  else{lbl=monthLabels;req=monthRequired;sch=monthScheduled;act=monthActual;}
+
+  let html='';
+  lbl.forEach((label,i)=>{
+    const r=req[i],s=sch[i],a=act[i];
+    const sd=(s/r*100)-100;
+    let sfc,sfl;
+    const isSchOver = sd > thresh.schOver;
+    const isSchUnder = sd < -thresh.schUnder;
+    if(isSchOver){sfc='sch-flag-over';sfl=`⬆ +${sd.toFixed(1)}%`;}
+    else if(isSchUnder){sfc='sch-flag-under';sfl=`⬇ ${sd.toFixed(1)}%`;}
+    else{sfc='sch-flag-ok';sfl=`✓ ${sd>=0?'+':''}${sd.toFixed(1)}%`;}
+    const ar=a/s;
+    const isActCrit = ar < thresh.actCrit;
+    const isActGap  = ar < thresh.actGap && !isActCrit;
+    let ac='gap-green',al='✓ OK';
+    if(isActCrit){ac='gap-red';al='🔴 Critical';}else if(isActGap){ac='gap-yellow';al='⚠️ Gap';}
+
+    // breach filter — hide rows that don't match
+    let visible = true;
+    if (activeBreachFilter === 'schOver')  visible = isSchOver;
+    else if (activeBreachFilter === 'schUnder') visible = isSchUnder;
+    else if (activeBreachFilter === 'actCrit')  visible = isActCrit;
+    else if (activeBreachFilter === 'actGap')   visible = isActGap;
+    else if (activeBreachFilter === 'ok')       visible = !isSchOver && !isSchUnder && !isActCrit && !isActGap;
+
+    const e=i%2===0?'bg-white':'bg-slate-50/50';const rid=`row-${i}`;
+    const display = visible ? '' : 'display:none;';
+    html+=`<tr class="${e}" id="${rid}" style="${display}"><td class="px-4 py-2 text-slate-600 font-medium">${showPartners?`<span class="expand-btn" onclick="togglePartnerRows('${rid}')">▶</span>`:''} ${label}</td><td class="px-4 py-2 text-right font-mono">${r.toLocaleString()}</td><td class="px-4 py-2 text-right font-mono">${s.toLocaleString()}</td><td class="px-4 py-2 text-right font-mono">${a.toLocaleString()}</td><td class="px-4 py-2 text-right text-xs">${(s/r*100).toFixed(1)}%</td><td class="px-4 py-2 text-center"><span class="text-xs px-2 py-0.5 rounded ${sfc}">${sfl}</span></td><td class="px-4 py-2 text-right text-xs">${(ar*100).toFixed(1)}%</td><td class="px-4 py-2 text-center"><span class="text-xs px-2 py-0.5 rounded ${ac}">${al}</span></td></tr>`;
+    if(showPartners){['INTUIT','JDA','MAGNIT'].forEach((p,pi)=>{const rat=[0.50,0.30,0.20][pi];const pr=Math.round(r*rat),ps=Math.round(s*rat),pa=Math.round(a*rat);const pd=(ps/pr*100)-100;let psc='sch-flag-ok',psl=`✓ ${pd>=0?'+':''}${pd.toFixed(1)}%`;if(pd>thresh.schOver){psc='sch-flag-over';psl=`⬆ +${pd.toFixed(1)}%`;}else if(pd<-thresh.schUnder){psc='sch-flag-under';psl=`⬇ ${pd.toFixed(1)}%`;}let pac='gap-green',pal='✓ OK';if(pa/ps<thresh.actCrit){pac='gap-red';pal='🔴 Critical';}else if(pa/ps<thresh.actGap){pac='gap-yellow';pal='⚠️ Gap';}
+      html+=`<tr class="partner-sub-${rid}" style="${display}background:#f8fafc;"><td class="px-4 py-1 pl-10 text-slate-400 italic text-xs">↳ ${p}</td><td class="px-4 py-1 text-right font-mono text-xs text-slate-500">${pr.toLocaleString()}</td><td class="px-4 py-1 text-right font-mono text-xs text-slate-500">${ps.toLocaleString()}</td><td class="px-4 py-1 text-right font-mono text-xs text-slate-500">${pa.toLocaleString()}</td><td class="px-4 py-1 text-right text-xs text-slate-400">${(ps/pr*100).toFixed(1)}%</td><td class="px-4 py-1 text-center"><span class="text-xs px-2 py-0.5 rounded ${psc}">${psl}</span></td><td class="px-4 py-1 text-right text-xs text-slate-400">${(pa/ps*100).toFixed(1)}%</td><td class="px-4 py-1 text-center"><span class="text-xs px-2 py-0.5 rounded ${pac}">${pal}</span></td></tr>`;
+    });}
+  });
+  tb.innerHTML=html;
+}
+
+function togglePartnerRows(rid){const subs=document.querySelectorAll(`.partner-sub-${rid}`);const btn=document.querySelector(`#${rid} .expand-btn`);const vis=subs[0]?.style.display!=='none'&&subs[0]?.style.display!=='';subs.forEach(r=>r.style.display=vis?'none':'table-row');if(btn)btn.textContent=vis?'▶':'▼';}
+
+// ============================================================
+// DRILL-DOWN DRAWER
+// ============================================================
+let drawerSortMode = 'magnitude';
+
+function toggleBreachFilter(type) {
+  activeBreachFilter = (activeBreachFilter === type) ? null : type;
+  // If filter type is a breach type and we are in an aggregate view, open drawer
+  const sgFilter = document.getElementById('ars-sg-filter')?.value || 'all';
+  if (type !== 'ok' && (sgFilter === 'all' || document.getElementById('ars-bu-filter')?.value)) {
+    openDrawer(type);
+  }
+  refreshARSView();
+}
+
+function clearBreachFilter() {
+  activeBreachFilter = null;
+  refreshARSView();
+}
+
+function openDrawer(breachType) {
+  const sgs = getSGsForCurrentFilter();
+  const thresh = getThresholds();
+  const titleMap = {
+    schOver: 'Staff Groups — SCH Over Threshold',
+    schUnder: 'Staff Groups — SCH Under Threshold',
+    actCrit: 'Staff Groups — ACT Critical',
+    actGap: 'Staff Groups — ACT Gap',
+  };
+  document.getElementById('drawer-title').textContent = titleMap[breachType] || 'Staff Group Drill-Down';
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.getElementById('drawer-panel').classList.add('open');
+  renderDrawerContent(breachType, sgs, thresh);
+}
+
+function renderDrawerContent(breachType, sgs, thresh) {
+  // Build per-SG summary: count intervals breaching, worst deviation
+  const rows = sgs.map(sg => {
+    const breachRows = computeSGBreaches(sg).filter(r => r.schStatus === breachType || r.actStatus === breachType);
+    const worst = breachRows.reduce((w, r) => {
+      const mag = breachType === 'schOver' ? r.schDiff : breachType === 'schUnder' ? -r.schDiff : 100 - r.actPct;
+      return mag > w ? mag : w;
+    }, 0);
+    return { sg, breachCount: breachRows.length, worstMag: worst, breachRows };
+  }).filter(r => r.breachCount > 0);
+
+  if (drawerSortMode === 'magnitude') rows.sort((a, b) => b.worstMag - a.worstMag);
+  else rows.sort((a, b) => a.sg.label.localeCompare(b.sg.label));
+
+  document.getElementById('drawer-total-count').textContent = `${rows.length} staff group${rows.length !== 1 ? 's' : ''} with breaches`;
+
+  const colorMap = { schOver:'drill-row-over', schUnder:'drill-row-under', actCrit:'drill-row-crit', actGap:'drill-row-gap' };
+  const borderCls = colorMap[breachType] || '';
+  const unitLabel = (breachType === 'schOver' || breachType === 'schUnder') ? '% vs REQ' : '% below SCH';
+
+  let html = '';
+  if (rows.length === 0) {
+    html = '<div class="text-center text-slate-400 py-12 text-sm">No staff groups are exceeding this threshold with current filter settings.</div>';
+  } else {
+    rows.forEach(row => {
+      const buBadge = row.sg.bu ? `<span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-2">${row.sg.bu}</span>` : '';
+      const worstFmt = row.worstMag.toFixed(1);
+      // Mini interval list (top 3 worst)
+      const topBreaches = [...row.breachRows]
+        .sort((a,b) => {
+          const ma = breachType==='schOver' ? a.schDiff : breachType==='schUnder' ? -a.schDiff : 100-a.actPct;
+          const mb = breachType==='schOver' ? b.schDiff : breachType==='schUnder' ? -b.schDiff : 100-b.actPct;
+          return mb - ma;
+        })
+        .slice(0, 3);
+
+      html += `<div class="mb-3 p-3 rounded-lg border border-slate-200 ${borderCls} bg-white hover:bg-slate-50 cursor-pointer" onclick="highlightSG('${row.sg.key}')">
+        <div class="flex items-start justify-between mb-1">
+          <div class="font-semibold text-slate-800 text-sm leading-tight">${row.sg.label}${buBadge}</div>
+          <div class="text-right ml-4 flex-shrink-0">
+            <div class="font-bold text-base ${breachType==='schOver'?'text-red-600':breachType==='schUnder'?'text-orange-600':'text-red-800'}">+${worstFmt}%</div>
+            <div class="text-xs text-slate-400">worst ${unitLabel}</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-slate-500 mb-2">
+          <span class="font-semibold text-slate-700">${row.breachCount}</span> interval${row.breachCount!==1?'s':''} exceeding threshold
+        </div>
+        <div class="flex gap-1.5 flex-wrap">
+          ${topBreaches.map(b => {
+            const mag = breachType==='schOver' ? b.schDiff : breachType==='schUnder' ? -b.schDiff : 100-b.actPct;
+            return `<span class="text-xs bg-red-50 text-red-700 border border-red-100 rounded px-2 py-0.5">${b.label} (+${mag.toFixed(1)}%)</span>`;
+          }).join('')}
+          ${row.breachRows.length > 3 ? `<span class="text-xs text-slate-400">+${row.breachRows.length-3} more</span>` : ''}
+        </div>
+      </div>`;
+    });
+  }
+  document.getElementById('drawer-content').innerHTML = html;
+
+  const subtitleMap = { schOver:`SCH exceeds REQ by >${thresh.schOver}%`, schUnder:`SCH below REQ by >${thresh.schUnder}%`, actCrit:`ACT below ${(thresh.actCrit*100).toFixed(0)}% of SCH`, actGap:`ACT below ${(thresh.actGap*100).toFixed(0)}% of SCH` };
+  document.getElementById('drawer-subtitle').textContent = subtitleMap[breachType] || '';
+}
+
+function sortDrawer(mode) {
+  drawerSortMode = mode;
+  document.getElementById('sort-mag').classList.toggle('active', mode==='magnitude');
+  document.getElementById('sort-lbl').classList.toggle('active', mode==='label');
+  if (activeBreachFilter && activeBreachFilter !== 'ok') {
+    renderDrawerContent(activeBreachFilter, getSGsForCurrentFilter(), getThresholds());
+  }
+}
+
+function highlightSG(sgKey) {
+  closeDrawer();
+  document.getElementById('ars-sg-filter').value = sgKey;
+  activeBreachFilter = null;
+  refreshARSView();
+}
+
+function closeDrawer() {
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.getElementById('drawer-panel').classList.remove('open');
+}
+
+// ============================================================
+// AI MOCK
+// ============================================================
+const aiResponses={
+  'staffing readiness':{text:`<strong>Staffing Readiness</strong><br>Avg coverage <strong>94.2%</strong>. 3 intervals below threshold:<br><ul class="mt-2 space-y-1 text-sm text-slate-600"><li>🔴 9:00–9:30: −21 HC</li><li>🔴 8:00–8:30: −15 HC</li><li>🟡 8:30–9:00: −19 HC</li></ul>`,nav:'act-req-sch'},
+  'plan over plan':{text:`<strong>April Lock vs April Flash</strong><br>1 changed input: <strong>Supply Soft Inputs 10% → 15%</strong>. Projects +8.4% increase in requirements.`,nav:'pop-outputs'},
+  'gaps':{text:`<strong>Largest Gaps Today</strong><br><ul class="mt-2 text-sm text-slate-600 space-y-1"><li>🔴 9:00–9:30: −21 HC</li><li>🟡 8:30–9:00: −19 HC</li><li>🔴 8:00–8:30: −15 HC</li></ul>`,nav:'act-req-sch'},
+  'idp':{text:`<strong>IDP View</strong><br>Actual: <strong>278</strong> | Required: <strong>299</strong> | Sched: <strong>305</strong><br>Occupancy: 91.8% · Shrinkage: 28.0% · Coverage: 94.2%`,nav:'occ-util-shr'},
+};
+function submitPrompt(text){
+  if(!text?.trim())return;
+  document.getElementById('ai-input').value='';document.getElementById('suggested-prompts').style.display='none';
+  const chat=document.getElementById('chat-messages');
+  chat.innerHTML+=`<div class="flex justify-end"><div class="ai-bubble-user text-sm">${text}</div></div>`;
+  const tid='typing-'+Date.now();
+  chat.innerHTML+=`<div id="${tid}" class="ai-bubble-ai text-sm text-slate-400"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>`;
+  chat.scrollTop=chat.scrollHeight;
+  setTimeout(()=>{
+    document.getElementById(tid)?.remove();
+    const t=text.toLowerCase();let r=null;
+    if(t.includes('staffing readiness')||(t.includes('staffing')&&t.includes('readiness')))r=aiResponses['staffing readiness'];
+    else if(t.includes('plan over')||t.includes('lock')||t.includes('flash'))r=aiResponses['plan over plan'];
+    else if(t.includes('gap')||t.includes('largest'))r=aiResponses['gaps'];
+    else if(t.includes('idp'))r=aiResponses['idp'];
+    if(r){chat.innerHTML+=`<div class="ai-bubble-ai text-sm">${r.text}<div class="mt-3"><button onclick="showView('${r.nav}')" class="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded px-3 py-1.5 hover:bg-blue-100">View full dashboard →</button></div></div>`;}
+    else{chat.innerHTML+=`<div class="ai-bubble-ai text-sm text-slate-600">I don't have a pre-built response for that query. Navigate using the sidebar.</div>`;}
+    chat.scrollTop=chat.scrollHeight;
+  },900);
+}
+
+// ============================================================
+// CHARTS
+// ============================================================
+let charts={};
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+
+// ============================================================
+// POP DUAL INTERVAL CHARTS
+// ============================================================
+const rvStageColors = ['#3b82f6','#6366f1','#8b5cf6','#ec4899','#f97316','#10b981','#0d9488'];
+const rvStageNames  = ['Baseline Adj Productive','Reallocated','Bounded','Total Staffing','Throttled','Adjusted','Final Req'];
+
+function buildPlanChartDatasets(planKey) {
+  // Flash increases requirements ~8.4% on the final output; earlier stages slightly less
+  const scalars = planKey.includes('Flash') ? [1.0,1.0,1.0,1.04,1.04,1.08,1.084] : [1.0,1.0,1.0,1.0,1.0,1.0,1.0];
+  const bases   = [
+    requiredHC.map(h=>Math.round(h*1.39)),
+    requiredHC.map(h=>Math.round(h*1.35)),
+    requiredHC.map(h=>Math.round(h*1.35)),
+    requiredHC.map(h=>Math.round(h*1.88)),
+    requiredHC.map(h=>Math.round(h*1.35)),
+    requiredHC.map(h=>Math.round(h*1.00)),
+    requiredHC.map(h=>Math.round(h*1.00)),
+  ];
+  return rvStageNames.map((name,i) => ({
+    label: name,
+    data: bases[i].map(v=>Math.round(v*scalars[i])),
+    borderColor: rvStageColors[i],
+    backgroundColor: 'transparent',
+    tension: 0.3,
+    borderWidth: i===6 ? 2.5 : 1.5,
+    pointRadius: 0,
+    borderDash: i===6 ? [] : [3,2],
+  }));
+}
+
+// ============================================================
+// POP OUTPUTS — COLLAPSIBLE PARTNERS
+// ============================================================
+let pooPartnersVisible = true;
+
+function togglePOOPartners() {
+  pooPartnersVisible = !pooPartnersVisible;
+  const btn = document.getElementById('poo-partner-toggle-btn');
+  if (btn) btn.textContent = pooPartnersVisible ? '▼ Collapse Partners' : '▶ Expand Partners';
+  document.querySelectorAll('.poo-partner-row').forEach(el => {
+    el.style.display = pooPartnersVisible ? '' : 'none';
+  });
+}
+
+function initPopCharts() {
+  destroyChart('popChartA'); destroyChart('popChartB');
+  const planA = document.getElementById('poo-plan-a')?.value || 'aprilLock';
+  const planB = document.getElementById('poo-plan-b')?.value || 'aprilFlash';
+  const labelA = planLabels[planA]||planA;
+  const labelB = planLabels[planB]||planB;
+  document.getElementById('pop-chart-a-title').textContent = `Plan A — Requirements by Interval (${labelA})`;
+  document.getElementById('pop-chart-b-title').textContent = `Plan B — Requirements by Interval (${labelB})`;
+
+  // 6 stages only — exclude Final Requirement (index 6)
+  const stageColors6 = rvStageColors.slice(0,6);
+  const stageNames6  = rvStageNames.slice(0,6);
+
+  function makeDatasetsNoFinal(planKey) {
+    const scalars = planKey.includes('Flash') ? [1.0,1.0,1.0,1.04,1.04,1.08] : [1.0,1.0,1.0,1.0,1.0,1.0];
+    const bases   = [
+      requiredHC.map(h=>Math.round(h*1.39)),
+      requiredHC.map(h=>Math.round(h*1.35)),
+      requiredHC.map(h=>Math.round(h*1.35)),
+      requiredHC.map(h=>Math.round(h*1.88)),
+      requiredHC.map(h=>Math.round(h*1.35)),
+      requiredHC.map(h=>Math.round(h*1.00)),
+    ];
+    return stageNames6.map((name,i) => ({
+      label: name,
+      data: bases[i].map(v=>Math.round(v*scalars[i])),
+      borderColor: stageColors6[i],
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      borderWidth: 1.5,
+      pointRadius: 0,
+      borderDash: i<5 ? [3,2] : [],
+    }));
+  }
+
+  const opts = {
+    responsive:true, maintainAspectRatio:true,
+    plugins:{legend:{position:'right',labels:{boxWidth:10,font:{size:9},padding:6}}},
+    scales:{x:{ticks:{font:{size:9},maxTicksLimit:14}},y:{ticks:{font:{size:9}},title:{display:true,text:'HC',font:{size:9}}}}
+  };
+  const ctxA = document.getElementById('popChartA');
+  if(ctxA) charts['popChartA'] = new Chart(ctxA, {type:'line', data:{labels:intervals, datasets:makeDatasetsNoFinal(planA)}, options:JSON.parse(JSON.stringify(opts))});
+  const ctxB = document.getElementById('popChartB');
+  if(ctxB) charts['popChartB'] = new Chart(ctxB, {type:'line', data:{labels:intervals, datasets:makeDatasetsNoFinal(planB)}, options:JSON.parse(JSON.stringify(opts))});
+}
+
+
+// ============================================================
+// NEW PLAN / SCHEDULE IMPACTS (PSI)
+// ============================================================
+let psiFilter = 'all';
+let psiGranularity = 'interval';
+
+function setPSIGranularity(g) {
+  psiGranularity = g;
+  ['interval','day','week','month'].forEach(x => document.getElementById('psi-gran-'+x)?.classList.toggle('active', x===g));
+  const labels = {interval:'Interval',day:'Date',week:'Week',month:'Month'};
+  const tableLabel = document.getElementById('psi-table-label');
+  const colLabel = document.getElementById('psi-col-period');
+  if(tableLabel) tableLabel.textContent = `${labels[g]} Detail — Before vs After`;
+  if(colLabel) colLabel.textContent = labels[g];
+  buildPSI();
+  setTimeout(initPSIChart, 50);
+}
+
+function getStatusLabel(sch, req, thresh=0.02) {
+  const diff = (sch-req)/req;
+  if (diff < -thresh) return 'under';
+  if (diff > thresh)  return 'over';
+  return 'at';
+}
+function statusBadge(s) {
+  const m = {under:'bg-red-100 text-red-700',at:'bg-green-100 text-green-700',over:'bg-amber-100 text-amber-700'};
+  const l = {under:'Under-staffed',at:'At Staffing',over:'Over-staffed'};
+  return `<span class="text-xs px-2 py-0.5 rounded font-semibold ${m[s]}">${l[s]}</span>`;
+}
+
+function getPSIData() {
+  const planAfter = document.getElementById('psi-plan-after')?.value || 'aprilFlash';
+  const scale = planAfter.includes('Flash') ? 1.084 : 1.0;
+  if (psiGranularity === 'day') {
+    return { lbl:dayLabels, reqBefore:dayRequired, reqAfter:dayRequired.map(h=>Math.round(h*scale)), sch:dayScheduled, scale };
+  } else if (psiGranularity === 'week') {
+    return { lbl:weekLabels, reqBefore:weekRequired, reqAfter:weekRequired.map(h=>Math.round(h*scale)), sch:weekScheduled, scale };
+  } else if (psiGranularity === 'month') {
+    return { lbl:monthLabels, reqBefore:monthRequired, reqAfter:monthRequired.map(h=>Math.round(h*scale)), sch:monthScheduled, scale };
+  }
+  return { lbl:intervals, reqBefore:requiredHC, reqAfter:requiredHC.map(h=>Math.round(h*scale)), sch:scheduledHC, scale };
+}
+
+function buildPSI() {
+  const { lbl, reqBefore, reqAfter, sch, scale } = getPSIData();
+  let underCt=0, atCt=0, overCt=0;
+  lbl.forEach((_,i) => {
+    const sa = getStatusLabelPSI(sch[i], reqAfter[i]);
+    if(sa==='under') underCt++;
+    else if(sa==='at') atCt++;
+    else overCt++;
+  });
+  document.getElementById('psi-kpis').innerHTML = `
+    <div class="kpi-card text-center border-l-4 border-red-400"><div class="text-3xl font-bold text-red-600">${underCt}</div><div class="text-xs text-slate-500 mt-1">Now Under-staffed</div></div>
+    <div class="kpi-card text-center border-l-4 border-green-400"><div class="text-3xl font-bold text-green-600">${atCt}</div><div class="text-xs text-slate-500 mt-1">At Staffing</div></div>
+    <div class="kpi-card text-center border-l-4 border-amber-400"><div class="text-3xl font-bold text-amber-600">${overCt}</div><div class="text-xs text-slate-500 mt-1">Over-staffed</div></div>
+    <div class="kpi-card text-center border-l-4 border-slate-300"><div class="text-3xl font-bold text-slate-700">${scale>1?'+':''}${Math.round((scale-1)*100)}%</div><div class="text-xs text-slate-500 mt-1">Net Req Change</div></div>`;
+  buildPSITable(reqBefore, reqAfter, sch, lbl);
+}
+
+function setPSIFilter(f) {
+  psiFilter = f;
+  ['all','changed','under','over'].forEach(x => document.getElementById('psi-filter-'+x)?.classList.toggle('active', x===f));
+  const { reqBefore, reqAfter, sch, lbl } = getPSIData();
+  buildPSITable(reqBefore, reqAfter, sch, lbl);
+}
+
+function buildPSITable(reqBefore, reqAfter, sch, lbl) {
+  const tb = document.getElementById('psiTable');
+  if(!tb) return;
+  const labels = lbl || intervals;
+  let html = '';
+  labels.forEach((label,i) => {
+    const sb = getStatusLabelPSI(sch[i], reqBefore[i]);
+    const sa = getStatusLabelPSI(sch[i], reqAfter[i]);
+    const changed = sb !== sa;
+    const deltaReq = reqAfter[i] - reqBefore[i];
+    const nowUnder = sa === 'under';
+    const nowOver  = sa === 'over';
+
+    if (psiFilter === 'changed' && !changed) return;
+    if (psiFilter === 'under' && !nowUnder) return;
+    if (psiFilter === 'over'  && !nowOver)  return;
+
+    const impactMap = {
+      'at→under':  {cls:'bg-red-50',   icon:'⬇️', label:'Dropped to Under'},
+      'over→under':{cls:'bg-red-50',   icon:'⬇️', label:'Dropped to Under'},
+      'over→at':   {cls:'bg-green-50', icon:'↘',  label:'Normalised'},
+      'at→over':   {cls:'bg-amber-50', icon:'⬆',  label:'Moved to Over'},
+      'under→at':  {cls:'bg-green-50', icon:'⬆',  label:'Improved to At'},
+      'under→over':{cls:'bg-amber-50', icon:'⬆',  label:'Moved to Over'},
+    };
+    const impactKey = `${sb}→${sa}`;
+    const imp = impactMap[impactKey];
+    const rowCls = imp?.cls || (i%2===0?'bg-white':'bg-slate-50/40');
+
+    html += `<tr class="${rowCls}">
+      <td class="px-4 py-2 font-mono text-xs text-slate-600">${label}</td>
+      <td class="px-4 py-2 text-right font-mono">${sch[i].toLocaleString()}</td>
+      <td class="px-4 py-2 text-right font-mono text-slate-500">${reqBefore[i].toLocaleString()}</td>
+      <td class="px-4 py-2 text-center">${statusBadge(sb)}</td>
+      <td class="px-4 py-2 text-right font-mono ${deltaReq>0?'text-red-600 font-semibold':deltaReq<0?'text-green-600':''}">${reqAfter[i].toLocaleString()}</td>
+      <td class="px-4 py-2 text-center">${statusBadge(sa)}</td>
+      <td class="px-4 py-2 text-right text-xs ${deltaReq>0?'text-red-600 font-semibold':deltaReq<0?'text-green-600':'text-slate-400'}">${deltaReq>0?'+':''}${deltaReq}</td>
+      <td class="px-4 py-2 text-center text-xs">${changed ? `<span class="font-semibold">${imp?.icon||'→'} ${imp?.label||'Changed'}</span>` : '<span class="text-slate-300">—</span>'}</td>
+    </tr>`;
+  });
+  tb.innerHTML = html || '<tr><td colspan="8" class="px-4 py-6 text-center text-slate-400 text-sm">No rows match the current filter.</td></tr>';
+}
+
+function initPSIChart() {
+  destroyChart('psiStatus');
+  const ctx = document.getElementById('psiStatusChart');
+  if (!ctx) return;
+  const { lbl, reqBefore, reqAfter, sch } = getPSIData();
+  const gapBefore = reqBefore.map((_,i) => sch[i]-reqBefore[i]);
+  const gapAfter  = reqAfter.map((_,i) => sch[i]-reqAfter[i]);
+
+  charts['psiStatus'] = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: lbl,
+      datasets:[
+        {
+          label:'Gap Before New Plan (April Lock)',
+          data: gapBefore,
+          backgroundColor: gapBefore.map(v => v > 5 ? 'rgba(251,191,36,0.6)' : v < -5 ? 'rgba(239,68,68,0.5)' : 'rgba(34,197,94,0.5)'),
+          borderWidth:0,
+          barPercentage:0.45,
+          categoryPercentage:0.85,
+        },
+        {
+          label:'Gap After New Plan (April Flash)',
+          data: gapAfter,
+          backgroundColor: gapAfter.map(v => v > 5 ? 'rgba(251,191,36,0.85)' : v < -5 ? 'rgba(239,68,68,0.85)' : 'rgba(34,197,94,0.85)'),
+          borderWidth:0,
+          barPercentage:0.45,
+          categoryPercentage:0.85,
+        },
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{
+        legend:{position:'top',labels:{boxWidth:12,font:{size:11}}},
+        tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.raw>0?'+':''}${ctx.raw} HC`}}
+      },
+      scales:{
+        x:{ticks:{font:{size:9},maxTicksLimit:16}},
+        y:{
+          ticks:{font:{size:10},callback:v=>`${v>0?'+':''}${v} HC`},
+          title:{display:true,text:'Scheduled − Required HC',font:{size:10}},
+        }
+      }
+    }
+  });
+}
+
+function initWGCharts(){
+  destroyChart('wgDaily');const ctx1=document.getElementById('wgAuditDailyChart');
+  if(ctx1){
+    const days=['Apr 14','Apr 15','Apr 16','Apr 17','Apr 18','Apr 19','Apr 20','Apr 21','Apr 22'];
+    charts['wgDaily']=new Chart(ctx1,{type:'bar',data:{labels:days,datasets:[
+      {label:'Added',  data:[4,3,5,6,4,3,2,5,6],  backgroundColor:'rgba(22,163,74,0.7)'},
+      {label:'Edited', data:[9,11,10,12,9,8,7,10,10],backgroundColor:'rgba(37,99,235,0.7)'},
+      {label:'Removed',data:[2,3,2,4,3,2,1,3,3], backgroundColor:'rgba(220,38,38,0.7)'},
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:11}}}},scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10}}}}}});
+  }
+  destroyChart('wgDonut');const ctx2=document.getElementById('wgAuditDonutChart');
+  if(ctx2){
+    charts['wgDonut']=new Chart(ctx2,{type:'doughnut',data:{labels:['Edited (58%)','Added (26%)','Removed (16%)'],datasets:[{data:[86,38,23],backgroundColor:['#2563eb','#16a34a','#dc2626'],borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:11}}}}}});
+  }
+}
+
+function initCharts(){
+  // (IDP view removed; chart block retained for future use)
+}
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded',()=>{
+  refreshARSView();buildStaffingAdjTable();renderOccTable();setTimeout(()=>{renderOccChart();updateOccBreaches();},100);buildExpertAudit();buildWGAudit();initCharts();
+});
+</script>
+</body>
+</html>
