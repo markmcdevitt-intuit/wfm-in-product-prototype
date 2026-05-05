@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WFM — In-Product Reporting Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; }
+    .nav-item { transition: all 0.15s; cursor: pointer; }
+    .nav-item:hover { background: #1e3a5f; }
+    .nav-item.active { background: #0f52a0; border-left: 3px solid #38bdf8; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .badge-p0 { background:#dc2626; color:#fff; font-size:10px; padding:1px 5px; border-radius:4px; }
+    .badge-p1 { background:#d97706; color:#fff; font-size:10px; padding:1px 5px; border-radius:4px; }
+    .chip { display:inline-block; background:#e0f2fe; color:#0369a1; border-radius:12px; padding:3px 10px; font-size:12px; cursor:pointer; margin:2px; }
+    .chip:hover { background:#bae6fd; }
+    .ai-bubble-user { background:#0f52a0; color:#fff; border-radius:12px 12px 2px 12px; padding:10px 14px; max-width:70%; margin-left:auto; }
+    .ai-bubble-ai { background:#fff; border:1px solid #e2e8f0; border-radius:2px 12px 12px 12px; padding:12px 16px; max-width:80%; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+    .alert-critical { border-left: 4px solid #dc2626; }
+    .alert-warning  { border-left: 4px solid #d97706; }
+    .alert-info     { border-left: 4px solid #2563eb; }
+    .gap-red    { background:#fef2f2; color:#dc2626; }
+    .gap-yellow { background:#fffbeb; color:#92400e; }
+    .gap-green  { background:#f0fdf4; color:#166534; }
+    canvas { max-height: 300px; }
+    .scrollable-table { overflow-x: auto; }
+    .kpi-card { background:#fff; border-radius:8px; padding:16px; border:1px solid #e2e8f0; }
+    .status-progress { background:#fef3c7; color:#92400e; }
+    #ai-input:focus { outline:none; box-shadow: 0 0 0 2px #38bdf8; }
+    .typing-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#94a3b8; animation: blink 1.2s infinite; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+    .toggle-btn { padding:5px 14px; border-radius:6px; font-size:13px; cursor:pointer; border:1px solid #cbd5e1; background:#fff; color:#475569; transition:all 0.15s; }
+    .toggle-btn.active { background:#0f52a0; color:#fff; border-color:#0f52a0; }
+    .expand-btn { cursor:pointer; user-select:none; color:#94a3b8; font-size:11px; margin-left:4px; }
+    .filter-section { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; margin-bottom:16px; }
+    .filter-label { font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px; }
+    select.filter-select, input.filter-select { border:1px solid #cbd5e1; border-radius:6px; padding:5px 10px; font-size:13px; color:#334155; background:#fff; }
+    .sch-flag-over  { background:#fef2f2; color:#dc2626; }
+    .sch-flag-under { background:#fff7ed; color:#c2410c; }
+    .sch-flag-ok    { background:#f0fdf4; color:#166534; }
+    .waterfall-bar  { transition: width 0.4s ease; }
+    .indent-partner { padding-left:2rem; font-style:italic; color:#64748b; font-size:12px; }
+    /* Audit trail styles */
+    .audit-action-add    { background:#dcfce7; color:#166534; }
+    .audit-action-edit   { background:#dbeafe; color:#1e40af; }
+    .audit-action-remove { background:#fee2e2; color:#991b1b; }
+    .audit-timeline-line { position:absolute; left:19px; top:0; bottom:0; width:2px; background:#e2e8f0; z-index:0; }
+    .audit-dot-add    { background:#16a34a; }
+    .audit-dot-edit   { background:#2563eb; }
+    .audit-dot-remove { background:#dc2626; }
+    .wg-audit-bar { height:8px; border-radius:4px; }
+  </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+<!-- SIDEBAR -->
+<div class="w-60 flex-shrink-0 bg-[#0d2240] text-white flex flex-col" style="min-height:100vh">
+  <div class="px-4 py-4 border-b border-[#1e3a5f]">
+    <div class="text-xs font-bold uppercase tracking-widest text-blue-300 mb-1">WFM</div>
+    <div class="text-lg font-bold leading-tight">In-Product Reporting</div>
+    <div class="text-xs text-slate-400 mt-1">Prototype · Apr 2026</div>
+  </div>
+  <nav class="flex-1 py-3 overflow-y-auto">
+    <div class="px-3 mb-1 text-xs uppercase tracking-wider text-slate-500 font-semibold">AI Engine</div>
+    <div class="nav-item active px-4 py-2.5 text-sm flex items-center gap-2" onclick="showView('ai-engine')">🤖 AI Observability</div>
+    <div class="nav-item px-4 py-2.5 text-sm flex items-center gap-2" onclick="showView('alerts')">🔔 Proactive Alerts <span class="ml-auto bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">4</span></div>
+
+    <div class="px-3 mt-4 mb-1 text-xs uppercase tracking-wider text-slate-500 font-semibold">Staffing</div>
+    <div class="nav-item px-4 py-2.5 text-sm flex items-center gap-2" onclick="showView('act-req-sch')">📊 Actual vs REQ vs SCH</div>
+    <div class="nav-item px-4 py-2.5 text-sm flex items-center gap-2" onclick="showView('idp-views')">📈 IDP Views</div>
+    <div class="nav-item px-4 py-2.5 text-sm flex items-center gap-2" onclick="showView('occ-util-shr')">📉 OCC / UTIL / SHR</div>
+
+    <div class="px-3 mt-4 mb-1 text-xs uppercase tracking-wider text-slate-500 font-semibold">Planning</div>
+    <div class="nav-item px-4 py-2.5 text-sm flex items-center gap-2" onclick="showView('pop-comparison')">🔀 Plan over Plan Comparison</div>
+    <div class="nav-item px-4 py-2.5 text-sm flex items-center gap-2" onclick="showView('req-versions')">🌊 Requirements Versions</div>
+    <div class="nav-item px-4 py-2.5 text-sm flex items-center gap-2" onclick="showView('staffing-adj')">🔍 Staffing Adjustments</div>
+
+    <div class="px-3 mt-4 mb-1 text-xs uppercase tracking-wider text-slate-500 font-semibold">Audit</div>
+    <div class="nav-item px-4 py-2.5 text-sm flex items-center gap-2" onclick="showView('expert-audit')">👤 Expert Schedule Audit</div>
+    <div class="nav-item px-4 py-2.5 text-sm flex items-center gap-2" onclick="showView('wg-audit')">🏢 WG Schedule Audit</div>
+  </nav>
+  <div class="px-4 py-3 border-t border-[#1e3a5f] text-xs text-slate-500">
+    <div class="flex items-center gap-2">
+      <div class="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-xs">M</div>
+      <div>mmcdevitt@intuit.com</div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="flex-1 flex flex-col overflow-hidden">
+  <div class="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-4 flex-shrink-0">
+    <div class="flex-1 text-sm text-slate-500" id="breadcrumb">AI Observability Engine</div>
+    <div class="flex items-center gap-3 text-sm">
+      <select class="border rounded px-2 py-1 text-sm text-slate-600"><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option><option>All Workgroups</option></select>
+      <input type="date" class="border rounded px-2 py-1 text-sm text-slate-600" value="2025-03-01">
+      <button class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Apply</button>
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-y-auto p-6">
+
+    <!-- ===== AI ENGINE ===== -->
+    <div class="view active" id="view-ai-engine">
+      <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-6">
+          <h1 class="text-2xl font-bold text-slate-800">AI Observability Engine</h1>
+          <p class="text-slate-500 mt-1">Ask anything about scheduling, staffing, demand, and supply operations</p>
+          <div class="inline-flex items-center gap-1.5 mt-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-3 py-1">
+            <span class="w-2 h-2 bg-green-500 rounded-full inline-block"></span>Data as of Apr 22, 2026 · Last refresh: 2 min ago
+          </div>
+        </div>
+        <div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-5 flex items-start gap-3">
+          <span class="text-amber-500 text-lg">⚠️</span>
+          <div class="text-sm"><strong class="text-amber-800">4 active alerts</strong><span class="text-amber-700"> · Scheduled coverage below threshold in 3 intervals for CTG_US_DE_FS_PROF1_EN · </span><span class="text-blue-600 cursor-pointer underline" onclick="showView('alerts')">View alerts →</span></div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-5 space-y-4 min-h-64" id="chat-messages">
+            <div class="ai-bubble-ai text-sm"><div class="font-semibold text-slate-700 mb-1">👋 Hello, mmcdevitt</div><div class="text-slate-600">I can help you understand staffing readiness, supply plan changes, IDP performance, and more.</div></div>
+          </div>
+          <div class="px-5 pb-3" id="suggested-prompts">
+            <div class="text-xs text-slate-400 mb-2">Suggested queries</div>
+            <div>
+              <span class="chip" onclick="submitPrompt('Show me staffing readiness for CTG_US_DE_FS_PROF1_EN today')">Staffing readiness today</span>
+              <span class="chip" onclick="submitPrompt('Compare April Lock vs April Flash')">Plan over Plan comparison</span>
+              <span class="chip" onclick="submitPrompt('What are my largest gaps today?')">Largest gaps today</span>
+              <span class="chip" onclick="submitPrompt('Show me IDP view for CG US today')">IDP view</span>
+            </div>
+          </div>
+          <div class="border-t border-slate-100 px-4 py-3 flex gap-3">
+            <input type="text" id="ai-input" placeholder="Ask about staffing, supply, schedules, or plans..." class="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2" onkeydown="if(event.key==='Enter') submitPrompt(this.value)">
+            <button onclick="submitPrompt(document.getElementById('ai-input').value)" class="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700">Send</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-4 gap-4 mt-5">
+          <div class="kpi-card text-center"><div class="text-3xl font-bold text-blue-700">94.2%</div><div class="text-xs text-slate-500 mt-1">Avg Actual Coverage</div></div>
+          <div class="kpi-card text-center"><div class="text-3xl font-bold text-emerald-600">97.1%</div><div class="text-xs text-slate-500 mt-1">Scheduled Coverage</div></div>
+          <div class="kpi-card text-center"><div class="text-3xl font-bold text-amber-600">3</div><div class="text-xs text-slate-500 mt-1">Intervals Below Threshold</div></div>
+          <div class="kpi-card text-center"><div class="text-3xl font-bold text-purple-600">+5%</div><div class="text-xs text-slate-500 mt-1">Supply Soft Inputs Δ</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ALERTS ===== -->
+    <div class="view" id="view-alerts">
+      <div class="max-w-3xl">
+        <div class="flex items-center justify-between mb-5">
+          <h1 class="text-xl font-bold text-slate-800">Proactive Alerts <span class="badge-p0 ml-2">P0</span></h1>
+          <div class="flex gap-2"><button class="border border-slate-300 rounded px-3 py-1.5 text-sm hover:bg-slate-50">Configure Thresholds</button><button class="border border-slate-300 rounded px-3 py-1.5 text-sm hover:bg-slate-50">Alert History</button></div>
+        </div>
+        <div class="space-y-3">
+          <div class="bg-white rounded-lg p-4 border alert-critical shadow-sm"><div class="flex items-start justify-between"><div><div class="flex items-center gap-2 mb-1"><span class="text-red-600 font-bold text-sm">🚨 CRITICAL — Coverage Gap</span><span class="text-xs text-slate-400">2 min ago</span></div><p class="text-sm text-slate-700"><strong>CTG_US_DE_FS_PROF1_EN</strong> · Today 9:00–9:30 AM</p><p class="text-sm text-slate-600 mt-1">Actual hours tracking <strong>6.8% below scheduled</strong>. Required: 299 HC · Scheduled: 305 HC · Actual: 278 HC.</p></div><button class="text-slate-400 hover:text-slate-600 text-xs ml-4">Dismiss</button></div></div>
+          <div class="bg-white rounded-lg p-4 border alert-warning shadow-sm"><div class="flex items-start justify-between"><div><div class="flex items-center gap-2 mb-1"><span class="text-amber-600 font-bold text-sm">⚠️ WARNING — Plan Version Change</span><span class="text-xs text-slate-400">1 hr ago</span></div><p class="text-sm text-slate-700"><strong>WG 1 (CTG_US_DE_FS_PROF1_EN)</strong> · April Flash published</p><p class="text-sm text-slate-600 mt-1">Supply Soft Inputs increased <strong>10% → 15%</strong>, estimated <strong>+8.4% increase</strong> in staffing requirements.</p></div><button class="text-slate-400 hover:text-slate-600 text-xs ml-4">Dismiss</button></div></div>
+          <div class="bg-white rounded-lg p-4 border alert-info shadow-sm"><div class="flex items-start justify-between"><div><div class="flex items-center gap-2 mb-1"><span class="text-blue-600 font-bold text-sm">ℹ️ INFO — Schedule Audit</span><span class="text-xs text-slate-400">3 hrs ago</span></div><p class="text-sm text-slate-700"><strong>CTG_US_DE_FS_PROF1_EN</strong> · 14 work shifts modified</p><p class="text-sm text-slate-600 mt-1"><strong>14 shift edits</strong> and <strong>3 workgroup reassignments</strong> recorded. No anomalies detected.</p></div><button class="text-slate-400 hover:text-slate-600 text-xs ml-4">Dismiss</button></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ACTUAL vs REQ vs SCH ===== -->
+    <div class="view" id="view-act-req-sch">
+      <div class="mb-4 flex items-center justify-between">
+        <h1 class="text-xl font-bold text-slate-800">Actual vs REQ vs SCH <span class="badge-p0 ml-2">P0</span></h1>
+        <div class="flex items-center gap-3 text-sm">
+          <label class="flex items-center gap-1.5"><input type="radio" name="unit" checked> FTE / HC</label>
+          <label class="flex items-center gap-1.5"><input type="radio" name="unit"> Hours</label>
+          <select class="border rounded px-2 py-1"><option>Baseline Adj Productive (Type 2)</option><option>Staffed Hours</option></select>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-3">Filters</div>
+        <div class="grid grid-cols-4 gap-3 mb-3">
+          <div><div class="filter-label">Staff Group</div><select class="filter-select w-full"><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option><option>All Workgroups</option></select></div>
+          <div><div class="filter-label">Date</div><input type="date" class="filter-select w-full" value="2025-03-01"></div>
+          <div><div class="filter-label">Business Unit</div><select class="filter-select w-full"><option value="">All</option><option>CG</option><option>PCG</option><option>SBSEG</option></select></div>
+          <div><div class="filter-label">Expert Ecosystem</div><select class="filter-select w-full"><option value="">All</option><option>Tax Expert</option><option>BookkeepingExpert</option><option>Financial Advisor</option><option>CPA</option></select></div>
+        </div>
+        <div class="grid grid-cols-5 gap-3">
+          <div><div class="filter-label">Expert Ecosystem Parent</div><select class="filter-select w-full"><option value="">All</option><option>TurboTax Live</option><option>QuickBooks Live</option><option>Mint Live</option></select></div>
+          <div><div class="filter-label">Tier</div><select class="filter-select w-full"><option value="">All Tiers</option><option>Tier 1</option><option>Tier 2</option></select></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full" id="partner-filter" onchange="refreshARSView()"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select></div>
+          <div><div class="filter-label">Country</div><select class="filter-select w-full"><option value="">All</option><option>US</option><option>CA</option><option>IN</option><option>PH</option></select></div>
+          <div><div class="filter-label">Lock or Flash</div><select class="filter-select w-full"><option>Lock</option><option>Flash</option></select></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-4 mb-4">
+        <div class="flex items-center gap-2"><span class="text-sm text-slate-600 font-medium">Show Partner Breakdown:</span><button id="partner-toggle-btn" onclick="togglePartnerBreakdown()" class="toggle-btn">Off</button></div>
+        <div class="h-4 w-px bg-slate-200"></div>
+        <div class="flex items-center gap-2"><span class="text-sm text-slate-600 font-medium">View:</span>
+          <div class="flex gap-1">
+            <button class="toggle-btn active" id="toggle-interval" onclick="setGranularity('interval')">Interval</button>
+            <button class="toggle-btn" id="toggle-day" onclick="setGranularity('day')">Day</button>
+            <button class="toggle-btn" id="toggle-week" onclick="setGranularity('week')">Week</button>
+            <button class="toggle-btn" id="toggle-month" onclick="setGranularity('month')">Month</button>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+        <div class="text-sm font-semibold text-slate-600 mb-3" id="ars-chart-label">CTG_US_DE_FS_PROF1_EN · 3/1/2025 · 30-min intervals</div>
+        <canvas id="actReqSchChart"></canvas>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-700" id="ars-table-label">Interval Detail — Gap Analysis</span>
+          <div class="flex items-center gap-3 text-xs text-slate-500">
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block"></span> SCH &gt;2% over REQ</span>
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-orange-100 border border-orange-300 inline-block"></span> SCH &gt;2% under REQ</span>
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded bg-green-100 border border-green-300 inline-block"></span> Within ±2%</span>
+          </div>
+        </div>
+        <div class="scrollable-table">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-slate-50 text-slate-600 text-xs uppercase">
+              <th class="px-4 py-2.5 text-left" id="col-period-header">Interval</th>
+              <th class="px-4 py-2.5 text-right">Required HC</th>
+              <th class="px-4 py-2.5 text-right">Scheduled HC</th>
+              <th class="px-4 py-2.5 text-right">Actual HC</th>
+              <th class="px-4 py-2.5 text-right">Sch vs Req %</th>
+              <th class="px-4 py-2.5 text-center">SCH Flag</th>
+              <th class="px-4 py-2.5 text-right">Act vs SCH %</th>
+              <th class="px-4 py-2.5 text-center">ACT Status</th>
+            </tr></thead>
+            <tbody id="arsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== IDP VIEWS ===== -->
+    <div class="view" id="view-idp-views">
+      <div class="mb-4 flex items-center justify-between">
+        <h1 class="text-xl font-bold text-slate-800">IDP Views <span class="badge-p0 ml-2">P0</span></h1>
+        <span class="status-progress text-xs px-2 py-0.5 rounded">In Progress</span>
+      </div>
+      <div class="filter-section">
+        <div class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-3">Filters</div>
+        <div class="grid grid-cols-4 gap-3 mb-3">
+          <div><div class="filter-label">Staff Group</div><select class="filter-select w-full"><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option></select></div>
+          <div><div class="filter-label">Date</div><input type="date" class="filter-select w-full" value="2025-03-01"></div>
+          <div><div class="filter-label">Business Unit</div><select class="filter-select w-full"><option value="">All</option><option>CG</option><option>PCG</option><option>SBSEG</option></select></div>
+          <div><div class="filter-label">Expert Ecosystem</div><select class="filter-select w-full"><option value="">All</option><option>Tax Expert</option><option>BookkeepingExpert</option><option>Financial Advisor</option></select></div>
+        </div>
+        <div class="grid grid-cols-5 gap-3">
+          <div><div class="filter-label">Expert Ecosystem Parent</div><select class="filter-select w-full"><option value="">All</option><option>TurboTax Live</option><option>QuickBooks Live</option></select></div>
+          <div><div class="filter-label">Tier</div><select class="filter-select w-full"><option value="">All Tiers</option><option>Tier 1</option><option>Tier 2</option></select></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select></div>
+          <div><div class="filter-label">Country</div><select class="filter-select w-full"><option value="">All</option><option>US</option><option>CA</option></select></div>
+          <div><div class="filter-label">Lock or Flash</div><select class="filter-select w-full"><option>Lock</option><option>Flash</option></select></div>
+        </div>
+      </div>
+      <div class="grid grid-cols-4 gap-4 mb-5">
+        <div class="kpi-card"><div class="text-xs text-slate-500 mb-1">Actual FTE</div><div class="text-2xl font-bold text-slate-800">278</div><div class="text-xs text-red-500">▼ 21 vs Required</div></div>
+        <div class="kpi-card"><div class="text-xs text-slate-500 mb-1">Required FTE</div><div class="text-2xl font-bold text-slate-800">299</div></div>
+        <div class="kpi-card"><div class="text-xs text-slate-500 mb-1">Scheduled FTE</div><div class="text-2xl font-bold text-slate-800">305</div></div>
+        <div class="kpi-card"><div class="text-xs text-slate-500 mb-1">Occupancy</div><div class="text-2xl font-bold text-slate-800">91.8%</div></div>
+        <div class="kpi-card"><div class="text-xs text-slate-500 mb-1">Shrinkage</div><div class="text-2xl font-bold text-slate-800">28.0%</div></div>
+        <div class="kpi-card"><div class="text-xs text-slate-500 mb-1">Utilization</div><div class="text-2xl font-bold text-slate-800">87.3%</div></div>
+        <div class="kpi-card"><div class="text-xs text-slate-500 mb-1">Net Staffed %</div><div class="text-2xl font-bold text-slate-800">93.0%</div></div>
+        <div class="kpi-card"><div class="text-xs text-slate-500 mb-1">Effective Coverage %</div><div class="text-2xl font-bold text-amber-600">94.2%</div></div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4"><div class="text-sm font-semibold text-slate-600 mb-3">IDP KPI Trends — CTG_US_DE_FS_PROF1_EN · Today</div><canvas id="idpChart"></canvas></div>
+    </div>
+
+    <!-- ===== OCC / UTIL / SHR ===== -->
+    <div class="view" id="view-occ-util-shr">
+      <div class="mb-4 flex items-center justify-between">
+        <h1 class="text-xl font-bold text-slate-800">OCC / UTIL / SHR <span class="badge-p0 ml-2">P0</span></h1>
+        <div class="text-sm text-slate-500">Occupancy · Utilization · Shrinkage</div>
+      </div>
+      <div class="filter-section">
+        <div class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-3">Filters</div>
+        <div class="grid grid-cols-4 gap-3 mb-3">
+          <div><div class="filter-label">Staff Group</div><select class="filter-select w-full"><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option></select></div>
+          <div><div class="filter-label">Date</div><input type="date" class="filter-select w-full" value="2025-04-27"></div>
+          <div><div class="filter-label">Business Unit</div><select class="filter-select w-full"><option value="">All</option><option>CG</option><option>PCG</option><option>SBSEG</option></select></div>
+          <div><div class="filter-label">Expert Ecosystem</div><select class="filter-select w-full"><option value="">All</option><option>Tax Expert</option><option>BookkeepingExpert</option></select></div>
+        </div>
+        <div class="grid grid-cols-5 gap-3">
+          <div><div class="filter-label">Expert Ecosystem Parent</div><select class="filter-select w-full"><option value="">All</option><option>TurboTax Live</option><option>QuickBooks Live</option></select></div>
+          <div><div class="filter-label">Tier</div><select class="filter-select w-full"><option value="">All Tiers</option><option>Tier 1</option><option>Tier 2</option></select></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full" id="occ-partner-filter" onchange="renderOccTable()"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select></div>
+          <div><div class="filter-label">Country</div><select class="filter-select w-full"><option value="">All</option><option>US</option><option>CA</option></select></div>
+          <div><div class="filter-label">Lock or Flash</div><select class="filter-select w-full"><option>Lock</option><option>Flash</option></select></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 mb-4">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Change Pivot Table Setting</span>
+        <button id="occ-pivot-partner" onclick="setOccPivot('partner')" class="toggle-btn active">By Partner</button>
+        <button id="occ-pivot-date" onclick="setOccPivot('date')" class="toggle-btn">By Date</button>
+        <button id="occ-pivot-sg" onclick="setOccPivot('staffgroup')" class="toggle-btn">By Staff Group</button>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100"><span class="text-sm font-semibold text-slate-700" id="occ-table-title">Partner Detail</span></div>
+        <div class="scrollable-table"><table class="w-full text-sm"><thead id="occ-thead"></thead><tbody id="occ-tbody"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ===== PLAN OVER PLAN ===== -->
+    <div class="view" id="view-pop-comparison">
+      <div class="mb-4">
+        <h1 class="text-xl font-bold text-slate-800">Plan over Plan Comparison <span class="badge-p1 ml-2">P1</span></h1>
+        <p class="text-sm text-slate-500 mt-1">Compare any two published plan versions side by side</p>
+      </div>
+      <!-- Filters -->
+      <div class="filter-section">
+        <div class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-3">Filters</div>
+        <div class="grid grid-cols-4 gap-3">
+          <div><div class="filter-label">Staff Group</div><select class="filter-select w-full"><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option><option>All Workgroups</option></select></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select></div>
+          <div><div class="filter-label">Date From</div><input type="date" class="filter-select w-full" value="2025-04-01"></div>
+          <div><div class="filter-label">Date To</div><input type="date" class="filter-select w-full" value="2025-04-30"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mt-3">
+          <div><div class="filter-label">Interval From</div><select class="filter-select w-full"><option>6:00</option><option>7:00</option><option>8:00</option><option>9:00</option><option>10:00</option></select></div>
+          <div><div class="filter-label">Interval To</div><select class="filter-select w-full"><option>20:30</option><option>18:00</option><option>16:00</option><option>14:00</option><option>12:00</option></select></div>
+        </div>
+      </div>
+      <!-- Plan selectors -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+        <div class="flex items-center gap-6 flex-wrap">
+          <div><div class="filter-label mb-1">Plan A (Column 1)</div>
+            <select class="filter-select" id="pop-plan-a" onchange="buildPopTable()">
+              <option value="marchLock">March Lock</option><option value="marchFlash">March Flash</option>
+              <option value="aprilLock" selected>April Lock</option><option value="aprilFlash">April Flash</option>
+              <option value="mayLock">May Lock</option><option value="mayFlash">May Flash</option>
+            </select>
+          </div>
+          <div class="text-slate-400 text-2xl mt-4">→</div>
+          <div><div class="filter-label mb-1">Plan B (Column 2)</div>
+            <select class="filter-select" id="pop-plan-b" onchange="buildPopTable()">
+              <option value="marchLock">March Lock</option><option value="marchFlash">March Flash</option>
+              <option value="aprilLock">April Lock</option><option value="aprilFlash" selected>April Flash</option>
+              <option value="mayLock">May Lock</option><option value="mayFlash">May Flash</option>
+            </select>
+          </div>
+          <div class="ml-4 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex-1">
+            🤖 The only change between the selected plans is <strong>Supply Soft Inputs: 10% → 15%</strong>. This projects a <strong>+8.4% increase</strong> in requirements across peak intervals.
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-5">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100">
+            <div class="grid grid-cols-5 text-xs font-bold uppercase text-slate-500 gap-2">
+              <div class="col-span-1">Category</div><div class="col-span-1">Input</div>
+              <div class="text-right" id="pop-col-a-label">April Lock</div>
+              <div class="text-right" id="pop-col-b-label">April Flash</div>
+              <div class="text-right">Delta</div>
+            </div>
+          </div>
+          <div id="popTable"></div>
+          <!-- Total Hours row -->
+          <div class="px-4 py-3 border-t-2 border-slate-300 bg-slate-50">
+            <div class="grid grid-cols-5 gap-2 items-center text-sm font-semibold">
+              <div class="col-span-1 text-slate-500 text-xs uppercase">Total</div>
+              <div class="col-span-1 text-slate-800">Total Hours</div>
+              <div class="text-right font-mono text-slate-700">1,800 hrs</div>
+              <div class="text-right font-mono text-blue-700">1,880 hrs</div>
+              <div class="text-right"><span class="text-amber-700 font-semibold text-xs">▲ +80 hrs</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <div class="text-sm font-semibold text-slate-600 mb-1">Scheduling Gap — vs New Requirement by Interval</div>
+          <div class="flex items-center gap-4 mb-3 text-xs flex-wrap">
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded inline-block" style="background:#16a34a"></span> Scheduled to New Req</span>
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded inline-block" style="background:#eab308"></span> Under Scheduled to New Req</span>
+            <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded inline-block" style="background:#dc2626"></span> Over Scheduled to New Req</span>
+          </div>
+          <canvas id="popGapChart"></canvas>
+          <div class="mt-3 grid grid-cols-3 gap-2 text-xs text-center">
+            <div class="bg-red-50 rounded p-2 border border-red-100"><div class="font-bold text-red-700">3</div><div class="text-slate-500">Intervals with gap</div></div>
+            <div class="bg-yellow-50 rounded p-2 border border-yellow-100"><div class="font-bold text-yellow-700">All</div><div class="text-slate-500">Correctable</div></div>
+            <div class="bg-green-50 rounded p-2 border border-green-100"><div class="font-bold text-green-700">0</div><div class="text-slate-500">In lock window</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== REQUIREMENTS VERSIONS ===== -->
+    <div class="view" id="view-req-versions">
+      <div class="mb-4">
+        <h1 class="text-xl font-bold text-slate-800">Requirements Versions <span class="badge-p0 ml-2">P0</span></h1>
+        <p class="text-sm text-slate-500 mt-1">Review how staffing requirements evolve across plan versions</p>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+        <div class="grid grid-cols-4 gap-4 items-end">
+          <div><div class="filter-label mb-1">Plan Version</div>
+            <select class="filter-select w-full">
+              <option>March Lock</option><option>March Flash</option><option>April Lock</option>
+              <option selected>April Flash</option><option>May Lock</option><option>May Flash</option>
+            </select>
+          </div>
+          <div><div class="filter-label mb-1">Staff Group</div>
+            <select class="filter-select w-full"><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option></select>
+          </div>
+          <div><div class="filter-label mb-1">Partner</div>
+            <select class="filter-select w-full"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select>
+          </div>
+          <div><div class="filter-label mb-1">Interval</div>
+            <select class="filter-select w-full">
+              <option value="">All Intervals</option>
+              <option>6:00</option><option>6:30</option><option>7:00</option><option>7:30</option>
+              <option>8:00</option><option>8:30</option><option>9:00</option><option>9:30</option>
+              <option selected>10:00</option><option>10:30</option><option>11:00</option><option>11:30</option>
+              <option>12:00</option><option>12:30</option><option>13:00</option><option>14:00</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-5 text-sm text-blue-800">
+        🤖 For CTG_US_DE_FS_PROF1_EN on 3/1/2025 at 10:00–10:30, the final requirement of <strong>337 HC</strong> was driven primarily by <strong>Shrinkage (28%)</strong> and <strong>Risk Tolerance (12.5%)</strong>.
+      </div>
+      <div class="grid grid-cols-2 gap-5">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <div class="text-sm font-semibold text-slate-600 mb-4">Requirements Waterfall — HC at 10:00–10:30</div>
+          <div class="space-y-3" id="waterfallBars"></div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <div class="text-sm font-semibold text-slate-600 mb-3">Requirements by Interval — All Day</div>
+          <canvas id="waterfallChart"></canvas>
+        </div>
+      </div>
+      <div class="mt-5 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 font-semibold text-sm text-slate-700">Plan Assumptions Applied</div>
+        <div class="p-4 grid grid-cols-3 gap-4 text-sm">
+          <div class="border rounded-lg p-3"><div class="font-semibold text-slate-700 mb-1">Risk Tolerance</div><div class="text-blue-700 font-mono">12.5%</div></div>
+          <div class="border rounded-lg p-3"><div class="font-semibold text-slate-700 mb-1">Allocated Hours</div><div class="text-blue-700 font-mono">100%</div></div>
+          <div class="border rounded-lg p-3"><div class="font-semibold text-slate-700 mb-1">Supply Soft Inputs</div><div class="text-blue-700 font-mono">15%</div><div class="text-xs text-slate-400 mt-1">April Flash value</div></div>
+          <div class="border rounded-lg p-3"><div class="font-semibold text-slate-700 mb-1">Min HC</div><div class="text-blue-700 font-mono">45</div></div>
+          <div class="border rounded-lg p-3"><div class="font-semibold text-slate-700 mb-1">Max HC</div><div class="text-blue-700 font-mono">400</div></div>
+          <div class="border rounded-lg p-3"><div class="font-semibold text-slate-700 mb-1">Shrinkage</div><div class="text-blue-700 font-mono">28.0%</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== STAFFING ADJUSTMENTS ===== -->
+    <div class="view" id="view-staffing-adj">
+      <div class="mb-4">
+        <h1 class="text-xl font-bold text-slate-800">Staffing Adjustments <span class="badge-p0 ml-2">P0</span></h1>
+        <p class="text-sm text-slate-500 mt-1">Expert Plan → IDP → Synchrony reconciliation</p>
+      </div>
+      <div class="filter-section">
+        <div class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-3">Filters</div>
+        <div class="grid grid-cols-4 gap-3">
+          <div><div class="filter-label">Workgroup</div><select class="filter-select w-full"><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option><option>CTG_US_DE_FS_PROF1_EN</option><option>All Workgroups</option></select></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select></div>
+          <div><div class="filter-label">Date From</div><input type="date" class="filter-select w-full" value="2025-02-17"></div>
+          <div><div class="filter-label">Date To</div><input type="date" class="filter-select w-full" value="2025-02-20"></div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="scrollable-table">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-slate-50 text-slate-500 text-xs uppercase">
+              <th class="px-3 py-2.5 text-left">Time</th>
+              <th class="px-3 py-2.5 text-right">Total HC</th>
+              <th class="px-3 py-2.5 text-right">Adjustment Rule</th>
+              <th class="px-3 py-2.5 text-right">Adjusted Total HC</th>
+              <th class="px-3 py-2.5 text-right">Synchrony</th>
+              <th class="px-3 py-2.5 text-right">% Diff</th>
+            </tr></thead>
+            <tbody id="staffingAdjTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== EXPERT SCHEDULE AUDIT ===== -->
+    <div class="view" id="view-expert-audit">
+      <div class="mb-4">
+        <h1 class="text-xl font-bold text-slate-800">Expert Schedule Audit <span class="badge-p0 ml-2">P0</span></h1>
+        <p class="text-sm text-slate-500 mt-1">View a complete audit trail of schedule changes for an individual expert on a given date</p>
+      </div>
+
+      <!-- Expert + Date selectors -->
+      <div class="filter-section">
+        <div class="grid grid-cols-4 gap-4 items-end">
+          <div>
+            <div class="filter-label">Expert</div>
+            <select class="filter-select w-full" id="expert-select" onchange="buildExpertAudit()">
+              <option value="sarah">Sarah M. (EMP-10482)</option>
+              <option value="james">James T. (EMP-10391)</option>
+              <option value="priya">Priya K. (EMP-10554)</option>
+              <option value="carlos">Carlos R. (EMP-10228)</option>
+            </select>
+          </div>
+          <div>
+            <div class="filter-label">Date</div>
+            <input type="date" class="filter-select w-full" id="expert-audit-date" value="2025-04-22" onchange="buildExpertAudit()">
+          </div>
+          <div>
+            <div class="filter-label">Workgroup</div>
+            <select class="filter-select w-full"><option>CTG_US_DE_FS_PROF1_EN</option><option>SBG_US_OL_AGGOLD_EN_PHN_SG</option></select>
+          </div>
+          <div>
+            <div class="filter-label">Partner</div>
+            <select class="filter-select w-full"><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary KPIs -->
+      <div class="grid grid-cols-4 gap-4 mb-5" id="expert-audit-kpis"></div>
+
+      <!-- Scheduled shift bar -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5" id="expert-shift-bar-card">
+        <div class="text-sm font-semibold text-slate-700 mb-3" id="expert-shift-bar-title">Scheduled Shift — Sarah M. · Apr 22, 2025</div>
+        <div class="relative h-10 bg-slate-100 rounded-lg overflow-hidden" style="min-width:100%">
+          <div id="expert-shift-bar" class="absolute h-full rounded-lg flex items-center px-3 text-white text-xs font-semibold" style="left:25%;width:50%;background:#2563eb;">8:00 AM – 4:30 PM (8.5 hrs)</div>
+        </div>
+        <div class="flex justify-between text-xs text-slate-400 mt-1"><span>6:00</span><span>9:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>21:00</span></div>
+      </div>
+
+      <!-- Audit timeline -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-700">Audit Trail</span>
+          <div class="flex items-center gap-3 text-xs text-slate-500">
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full inline-block audit-dot-add"></span>Added</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full inline-block audit-dot-edit"></span>Edited</span>
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full inline-block audit-dot-remove"></span>Removed</span>
+          </div>
+        </div>
+        <div class="p-5">
+          <div class="relative" id="expert-audit-timeline" style="padding-left:44px;">
+            <div class="audit-timeline-line"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== WG SCHEDULE AUDIT ===== -->
+    <div class="view" id="view-wg-audit">
+      <div class="mb-4">
+        <h1 class="text-xl font-bold text-slate-800">WG Schedule Audit <span class="badge-p0 ml-2">P0</span></h1>
+        <p class="text-sm text-slate-500 mt-1">Aggregate scheduling change metrics at the workgroup level — volume, patterns, and coverage impact of edits over time</p>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-section">
+        <div class="grid grid-cols-4 gap-4">
+          <div><div class="filter-label">Workgroup</div><select class="filter-select w-full" id="wg-audit-wg" onchange="buildWGAudit()"><option value="ctg">CTG_US_DE_FS_PROF1_EN</option><option value="sbg">SBG_US_OL_AGGOLD_EN_PHN_SG</option></select></div>
+          <div><div class="filter-label">Date From</div><input type="date" class="filter-select w-full" value="2025-04-14" onchange="buildWGAudit()"></div>
+          <div><div class="filter-label">Date To</div><input type="date" class="filter-select w-full" value="2025-04-22" onchange="buildWGAudit()"></div>
+          <div><div class="filter-label">Partner</div><select class="filter-select w-full"><option value="">All Partners</option><option>INTUIT</option><option>JDA</option><option>MAGNIT</option></select></div>
+        </div>
+      </div>
+
+      <!-- Summary KPIs -->
+      <div class="grid grid-cols-5 gap-4 mb-5">
+        <div class="kpi-card text-center"><div class="text-3xl font-bold text-slate-800">147</div><div class="text-xs text-slate-500 mt-1">Total Changes</div></div>
+        <div class="kpi-card text-center"><div class="text-3xl font-bold text-green-600">38</div><div class="text-xs text-slate-500 mt-1">Shifts Added</div></div>
+        <div class="kpi-card text-center"><div class="text-3xl font-bold text-blue-600">86</div><div class="text-xs text-slate-500 mt-1">Shifts Edited</div></div>
+        <div class="kpi-card text-center"><div class="text-3xl font-bold text-red-600">23</div><div class="text-xs text-slate-500 mt-1">Shifts Removed</div></div>
+        <div class="kpi-card text-center"><div class="text-3xl font-bold text-amber-600">12</div><div class="text-xs text-slate-500 mt-1">Unique Editors</div></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-5 mb-5">
+        <!-- Daily change volume chart -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <div class="text-sm font-semibold text-slate-700 mb-3">Daily Change Volume (Add / Edit / Remove)</div>
+          <canvas id="wgAuditDailyChart" style="max-height:220px"></canvas>
+        </div>
+        <!-- Change type breakdown + editor leaderboard -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <div class="text-sm font-semibold text-slate-700 mb-3">Change Type Distribution</div>
+          <canvas id="wgAuditDonutChart" style="max-height:200px"></canvas>
+        </div>
+      </div>
+
+      <!-- Interval heatmap of changes -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+        <div class="text-sm font-semibold text-slate-700 mb-1">Change Frequency by Interval</div>
+        <p class="text-xs text-slate-400 mb-3">Darker = more changes made to shifts covering that interval</p>
+        <div id="wg-audit-heatmap" class="flex gap-1 flex-wrap"></div>
+        <div class="flex justify-between text-xs text-slate-400 mt-2"><span>6:00</span><span>9:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>20:30</span></div>
+      </div>
+
+      <!-- Top edited experts table -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-700">Most Frequently Modified Experts</span>
+          <span class="text-xs text-slate-400">Top 10 by change count in period</span>
+        </div>
+        <div class="scrollable-table">
+          <table class="w-full text-sm">
+            <thead><tr class="bg-slate-50 text-slate-500 text-xs uppercase">
+              <th class="px-4 py-2.5 text-left">Expert</th>
+              <th class="px-4 py-2.5 text-left">Partner</th>
+              <th class="px-4 py-2.5 text-right">Added</th>
+              <th class="px-4 py-2.5 text-right">Edited</th>
+              <th class="px-4 py-2.5 text-right">Removed</th>
+              <th class="px-4 py-2.5 text-right">Total Changes</th>
+              <th class="px-4 py-2.5 text-left">Change Breakdown</th>
+              <th class="px-4 py-2.5 text-left">Last Modified By</th>
+            </tr></thead>
+            <tbody id="wg-audit-experts-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end scrollable -->
+</div><!-- end main -->
+
+<script>
+// ============================================================
+// CORE DATA
+// ============================================================
+const intervals = ['6:00','6:30','7:00','7:30','8:00','8:30','9:00','9:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00','19:30','20:00','20:30'];
+const requiredHC  = [136,174,208,233,243,270,299,325,337,328,345,327,320,315,288,274,259,259,233,213,189,188,170,150,129,122,88,55,21,20];
+const scheduledHC = requiredHC.map((hc,i)=>Math.round(hc*[0.97,0.96,0.98,0.95,0.99,0.97,0.94,0.98,1.00,0.96,0.97,1.01,0.98,0.99,0.96,0.95,0.97,0.98,1.03,0.96,0.98,0.97,0.99,0.96,0.95,0.97,0.98,0.96,1.00,0.97][i]));
+const actualHC    = requiredHC.map((hc,i)=>Math.round(hc*[0.97,0.95,0.98,0.96,0.94,0.93,0.89,0.97,0.99,0.98,0.96,0.94,0.97,0.98,0.99,0.97,0.95,0.96,0.98,0.97,0.99,1.00,0.98,0.97,0.96,0.95,0.97,0.98,1.00,0.99][i]));
+const dayLabels    = ['Mon 3/1','Tue 3/2','Wed 3/3','Thu 3/4','Fri 3/5','Sat 3/6','Sun 3/7'];
+const dayRequired  = [6420,7210,7450,7380,6990,4200,2100];
+const dayScheduled = dayRequired.map((r,i)=>Math.round(r*[0.97,0.96,0.98,0.95,0.97,0.99,0.98][i]));
+const dayActual    = dayRequired.map((r,i)=>Math.round(r*[0.95,0.96,0.97,0.95,0.94,0.98,0.99][i]));
+const weekLabels   = ['Wk 1 (3/1–3/7)','Wk 2 (3/8–3/14)','Wk 3 (3/15–3/21)','Wk 4 (3/22–3/28)'];
+const weekRequired = [41750,43200,42800,40100];
+const weekScheduled= weekRequired.map((r,i)=>Math.round(r*[0.97,0.98,0.96,0.97][i]));
+const weekActual   = weekRequired.map((r,i)=>Math.round(r*[0.955,0.961,0.968,0.952][i]));
+const monthLabels   = ['Jan 2025','Feb 2025','Mar 2025','Apr 2025'];
+const monthRequired = [162000,148000,171000,165000];
+const monthScheduled= monthRequired.map((r,i)=>Math.round(r*[0.97,0.98,0.96,0.97][i]));
+const monthActual   = monthRequired.map((r,i)=>Math.round(r*[0.958,0.962,0.955,0.971][i]));
+let currentGranularity = 'interval', showPartners = false;
+
+// ============================================================
+// PLAN OVER PLAN DATA
+// ============================================================
+const planLabels = {marchLock:'March Lock',marchFlash:'March Flash',aprilLock:'April Lock',aprilFlash:'April Flash',mayLock:'May Lock',mayFlash:'May Flash'};
+const popRows = [
+  {cat:'Demand',   input:'Volume (Offered)',         type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Demand',   input:'AHT',                      type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Demand',   input:'IDA',                      type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Demand',   input:'BO Requirements',          type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Demand',   input:'BO CST',                   type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Demand',   input:'Handle Rate',              type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Demand',   input:'BO MD Distribution',       type:'binary', planA:'—',    planB:'—',    changed:true},
+  {cat:'Demand',   input:'SLP_80',                   type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Demand',   input:'ASA',                      type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Capacity', input:'Concurrency Max',          type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Capacity', input:'Headcount Max',            type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Capacity', input:'Headcount Min',            type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Capacity', input:'Occupancy',                type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Capacity', input:'FG to WG Mapping',         type:'binary', planA:'—',    planB:'—',    changed:true},
+  {cat:'Capacity', input:'Tier 2 Ratio Distribution',type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Allocation',input:'Risk Tolerance',          type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Allocation',input:'Allocated Hours',         type:'group',  planA:null,   planB:null,   changed:false,
+    partners:[
+      {name:'INTUIT',planA:'711 hrs',planB:'711 hrs',changed:false},
+      {name:'JDA',   planA:'427 hrs',planB:'427 hrs',changed:false},
+      {name:'MAGNIT',planA:'284 hrs',planB:'284 hrs',changed:false},
+    ]},
+  {cat:'Allocation',input:'Supply Soft Inputs',      type:'value',  planA:'10%',  planB:'15%',  changed:true},
+  {cat:'Allocation',input:'Min Max HC Input',        type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Allocation',input:'Shrinkage',               type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Allocation',input:'Throttling',              type:'value',  planA:'—',    planB:'—',    changed:false},
+  {cat:'Allocation',input:'Alt Source Adjustments',  type:'value',  planA:'—',    planB:'—',    changed:false},
+];
+
+function buildPopTable() {
+  const planA = document.getElementById('pop-plan-a').value;
+  const planB = document.getElementById('pop-plan-b').value;
+  document.getElementById('pop-col-a-label').textContent = planLabels[planA]||planA;
+  document.getElementById('pop-col-b-label').textContent = planLabels[planB]||planB;
+  const tb = document.getElementById('popTable');
+  let html='', lastCat='';
+  popRows.forEach(row => {
+    if (row.cat!==lastCat) { html+=`<div class="px-4 py-2 bg-slate-50 border-b border-slate-100 text-xs font-bold uppercase text-slate-500">${row.cat}</div>`; lastCat=row.cat; }
+    const hl = row.changed?'bg-amber-50':'';
+    if (row.type==='group') {
+      html+=`<div class="px-4 py-2 border-b border-slate-50 text-sm bg-slate-50/50"><div class="grid grid-cols-5 gap-2 items-center"><div class="text-slate-400 text-xs">${row.cat}</div><div class="text-slate-700 font-semibold">${row.input}</div><div></div><div></div><div></div></div>`;
+      row.partners.forEach(p=>{
+        html+=`<div class="grid grid-cols-5 gap-2 items-center py-1.5 ${p.changed?'bg-amber-50':''}"><div></div><div class="indent-partner pl-6">${p.name}</div><div class="text-right font-mono text-xs">${p.planA}</div><div class="text-right font-mono text-xs ${p.changed?'font-bold text-blue-700':''}">${p.planB}</div><div class="text-right">${p.changed?'<span class="text-amber-700 text-xs font-semibold">▲ Changed</span>':'<span class="text-slate-300 text-xs">—</span>'}</div></div>`;
+      });
+      html+=`</div>`;
+    } else if (row.type==='binary') {
+      html+=`<div class="grid grid-cols-5 gap-2 px-4 py-2.5 border-b border-slate-50 text-sm ${hl} items-center"><div class="text-slate-400 text-xs">${row.cat}</div><div class="text-slate-700">${row.input}</div><div class="text-right text-slate-400 text-xs">—</div><div class="text-right"><span class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">Changed</span></div><div class="text-right"><span class="text-amber-700 font-semibold text-xs">▲ Changed</span></div></div>`;
+    } else {
+      html+=`<div class="grid grid-cols-5 gap-2 px-4 py-2.5 border-b border-slate-50 text-sm ${hl} items-center"><div class="text-slate-400 text-xs">${row.cat}</div><div class="text-slate-700">${row.input}</div><div class="text-right font-mono ${row.changed?'text-slate-500':''}">${row.planA}</div><div class="text-right font-mono ${row.changed?'font-bold text-blue-700':''}">${row.planB}</div><div class="text-right">${row.changed?'<span class="text-amber-700 font-semibold text-xs">▲ Changed</span>':'<span class="text-slate-300 text-xs">—</span>'}</div></div>`;
+    }
+  });
+  tb.innerHTML = html;
+}
+
+// ============================================================
+// OCC DATA
+// ============================================================
+let occPivot = 'partner';
+const occDates = ['4/21/2026','4/22/2026','4/23/2026','4/24/2026','4/25/2026','4/26/2026','4/27/2026'];
+const staffGroups = ['CTG_US_DE_FS_PROF1_EN','SBG_US_OL_AGGOLD_EN_PHN_SG','CTG_US_SE_FS_PROF2_EN','SBG_US_DE_AGGOLD_EN_CHA_SG'];
+const occPartners = {
+  INTUIT:{req:1420,sch:1384,act:1298,shr:15.0,util:62.4,occ:82.1},
+  JDA:{req:680,sch:651,act:622,shr:65.9,util:64.0,occ:100.0},
+  MAGNIT:{req:310,sch:299,act:284,shr:12.7,util:77.9,occ:88.9},
+};
+const occByDate = {
+  INTUIT:[{shr:14.8,util:61.9,occ:81.4},{shr:15.2,util:62.1,occ:82.8},{shr:15.0,util:63.0,occ:83.1},{shr:14.5,util:61.5,occ:80.9},{shr:15.3,util:62.8,occ:82.5},{shr:15.1,util:62.2,occ:81.9},{shr:15.0,util:62.4,occ:82.1}],
+  JDA:[{shr:64.2,util:63.1,occ:98.2},{shr:66.1,util:64.5,occ:100.0},{shr:65.5,util:64.0,occ:99.8},{shr:63.8,util:63.5,occ:97.4},{shr:66.3,util:65.1,occ:100.0},{shr:65.7,util:63.9,occ:100.0},{shr:65.9,util:64.0,occ:100.0}],
+  MAGNIT:[{shr:11.9,util:77.1,occ:87.8},{shr:12.4,util:77.5,occ:88.2},{shr:13.1,util:78.3,occ:89.4},{shr:12.0,util:76.9,occ:87.5},{shr:13.2,util:78.1,occ:89.1},{shr:12.8,util:77.8,occ:88.7},{shr:12.7,util:77.9,occ:88.9}],
+};
+const occBySG = {
+  'CTG_US_DE_FS_PROF1_EN':{req:1250,sch:1218,act:1140,shr:22.4,util:68.3,occ:86.2},
+  'SBG_US_OL_AGGOLD_EN_PHN_SG':{req:870,sch:840,act:798,shr:19.1,util:71.5,occ:88.4},
+  'CTG_US_SE_FS_PROF2_EN':{req:530,sch:511,act:476,shr:25.8,util:66.9,occ:84.7},
+  'SBG_US_DE_AGGOLD_EN_CHA_SG':{req:760,sch:765,act:690,shr:18.6,util:73.2,occ:91.8},
+};
+function setOccPivot(p){occPivot=p;['partner','date','staffgroup'].forEach(x=>document.getElementById('occ-pivot-'+x.replace('staffgroup','sg')).classList.toggle('active',x===p));renderOccTable();}
+function renderOccTable(){
+  const thead=document.getElementById('occ-thead'),tbody=document.getElementById('occ-tbody'),titleEl=document.getElementById('occ-table-title');
+  const pf=document.getElementById('occ-partner-filter')?.value||'';
+  const stdHdr=`<tr class="bg-slate-50 text-slate-500 text-xs uppercase"><th class="px-4 py-2.5 text-left">Row</th><th class="px-4 py-2.5 text-right">Required HC</th><th class="px-4 py-2.5 text-right">Scheduled HC</th><th class="px-4 py-2.5 text-right">Actual HC</th><th class="px-4 py-2.5 text-right">Shrinkage %</th><th class="px-4 py-2.5 text-right">Utilization %</th><th class="px-4 py-2.5 text-right">Occupancy %</th></tr>`;
+  if(occPivot==='partner'){
+    titleEl.textContent='Partner Detail'; thead.innerHTML=stdHdr;
+    const ps=['INTUIT','JDA','MAGNIT'].filter(p=>!pf||p===pf);
+    let h='',tR=0,tS=0,tA=0;
+    ps.forEach((p,pi)=>{const d=occPartners[p];tR+=d.req;tS+=d.sch;tA+=d.act;const e=pi%2===0?'bg-white':'bg-slate-50/40';
+      h+=`<tr class="${e}"><td class="px-4 py-2.5 font-semibold text-slate-700">${p}</td><td class="px-4 py-2.5 text-right font-mono">${d.req.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${d.sch.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${d.act.toLocaleString()}</td><td class="px-4 py-2.5 text-right">${d.shr.toFixed(1)}%</td><td class="px-4 py-2.5 text-right">${d.util.toFixed(1)}%</td><td class="px-4 py-2.5 text-right">${d.occ.toFixed(1)}%</td></tr>`;
+    });
+    h+=`<tr class="bg-slate-100 font-semibold border-t-2 border-slate-300"><td class="px-4 py-2.5 text-slate-700">Total / Avg</td><td class="px-4 py-2.5 text-right font-mono">${tR.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${tS.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${tA.toLocaleString()}</td><td class="px-4 py-2.5 text-right">—</td><td class="px-4 py-2.5 text-right">—</td><td class="px-4 py-2.5 text-right">—</td></tr>`;
+    tbody.innerHTML=h;
+  } else if(occPivot==='date'){
+    titleEl.textContent='Date Detail — by Partner';
+    const ps=['INTUIT','JDA','MAGNIT'].filter(p=>!pf||p===pf);
+    let th=`<tr class="bg-slate-50 text-slate-500 text-xs uppercase"><th class="px-4 py-2.5 text-left">Date</th>`;
+    ps.forEach(p=>{th+=`<th class="px-2 py-1 text-center border-l border-slate-200" colspan="3"><div class="font-bold text-slate-700 text-xs">${p}</div><div class="grid grid-cols-3 gap-0 mt-0.5 text-slate-400 font-normal normal-case" style="font-size:10px"><span class="text-center">SHR%</span><span class="text-center">UTIL%</span><span class="text-center">OCC%</span></div></th>`;});
+    thead.innerHTML=th+'</tr>';
+    let tb2='';
+    occDates.forEach((d,di)=>{const e=di%2===0?'bg-white':'bg-slate-50/40';let r=`<tr class="${e}"><td class="px-4 py-2.5 font-semibold text-slate-600 text-sm">${d}</td>`;
+      ps.forEach(p=>{const v=occByDate[p][di];r+=`<td class="px-3 py-2 text-center border-l border-slate-100 text-xs">${v.shr.toFixed(1)}%</td><td class="px-3 py-2 text-center text-xs">${v.util.toFixed(1)}%</td><td class="px-3 py-2 text-center text-xs">${v.occ.toFixed(1)}%</td>`;});
+      tb2+=r+'</tr>';
+    });
+    tb2+=`<tr class="bg-slate-100 font-semibold border-t-2 border-slate-300"><td class="px-4 py-2.5 text-slate-700">Avg</td>${ps.map(p=>`<td class="px-3 py-2 text-center border-l border-slate-200 text-xs">${(occByDate[p].reduce((s,v)=>s+v.shr,0)/occDates.length).toFixed(1)}%</td><td class="px-3 py-2 text-center text-xs">${(occByDate[p].reduce((s,v)=>s+v.util,0)/occDates.length).toFixed(1)}%</td><td class="px-3 py-2 text-center text-xs">${(occByDate[p].reduce((s,v)=>s+v.occ,0)/occDates.length).toFixed(1)}%</td>`).join('')}</tr>`;
+    tbody.innerHTML=tb2;
+  } else {
+    titleEl.textContent='Staff Group Detail'; thead.innerHTML=stdHdr.replace('<th class="px-4 py-2.5 text-left">Row</th>','<th class="px-4 py-2.5 text-left">Staff Group</th>');
+    let h='',tR=0,tS=0,tA=0;
+    staffGroups.forEach((sg,si)=>{const d=occBySG[sg];tR+=d.req;tS+=d.sch;tA+=d.act;const e=si%2===0?'bg-white':'bg-slate-50/40';
+      h+=`<tr class="${e}"><td class="px-4 py-2.5 font-semibold text-slate-700 text-xs font-mono">${sg}</td><td class="px-4 py-2.5 text-right font-mono">${d.req.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${d.sch.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${d.act.toLocaleString()}</td><td class="px-4 py-2.5 text-right">${d.shr.toFixed(1)}%</td><td class="px-4 py-2.5 text-right">${d.util.toFixed(1)}%</td><td class="px-4 py-2.5 text-right">${d.occ.toFixed(1)}%</td></tr>`;
+    });
+    h+=`<tr class="bg-slate-100 font-semibold border-t-2 border-slate-300"><td class="px-4 py-2.5 text-slate-700">Total / Avg</td><td class="px-4 py-2.5 text-right font-mono">${tR.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${tS.toLocaleString()}</td><td class="px-4 py-2.5 text-right font-mono">${tA.toLocaleString()}</td><td class="px-4 py-2.5 text-right">—</td><td class="px-4 py-2.5 text-right">—</td><td class="px-4 py-2.5 text-right">—</td></tr>`;
+    tbody.innerHTML=h;
+  }
+}
+
+// ============================================================
+// EXPERT SCHEDULE AUDIT DATA
+// ============================================================
+const expertAuditData = {
+  sarah: {
+    name:'Sarah M.', emp:'EMP-10482', partner:'INTUIT', shift:'8:00 AM – 4:30 PM',
+    shiftLeft:'25%', shiftWidth:'52%',
+    kpis:[
+      {label:'Total Changes',val:'5',color:'text-slate-800'},
+      {label:'Overlays Added',val:'2',color:'text-green-600'},
+      {label:'Overlays Edited',val:'2',color:'text-blue-600'},
+      {label:'Overlays Removed',val:'1',color:'text-red-600'},
+    ],
+    events:[
+      {time:'2:14 PM',action:'edit',   actor:'wfm.scheduler@intuit.com',  field:'Shift End Time',          before:'5:00 PM',      after:'4:30 PM',      reason:'Coverage surplus at peak hours resolved'},
+      {time:'1:47 PM',action:'add',    actor:'wfm.scheduler@intuit.com',  field:'Planned Time Off Overlay', before:'—',            after:'1:00–2:00 PM', reason:'Approved PTO request submitted same-day'},
+      {time:'11:22 AM',action:'edit',  actor:'supervisor.jones@intuit.com',field:'Lunch Overlay',           before:'1:00–1:30 PM', after:'12:00–12:30 PM',reason:'Staggered lunch scheduling per WG policy'},
+      {time:'10:05 AM',action:'add',   actor:'wfm.scheduler@intuit.com',  field:'Work Segment',            before:'—',            after:'6:00–8:00 PM', reason:'Backfill for absent colleague EMP-10391'},
+      {time:'7:01 AM', action:'remove',actor:'wfm.scheduler@intuit.com',  field:'Training Overlay',        before:'5:00–6:00 PM', after:'—',            reason:'Training session cancelled; rescheduled for following week'},
+    ]
+  },
+  james: {
+    name:'James T.', emp:'EMP-10391', partner:'INTUIT', shift:'9:00 AM – 5:30 PM',
+    shiftLeft:'31%', shiftWidth:'52%',
+    kpis:[
+      {label:'Total Changes',val:'3',color:'text-slate-800'},
+      {label:'Shifts Added',val:'0',color:'text-green-600'},
+      {label:'Shifts Edited',val:'2',color:'text-blue-600'},
+      {label:'Shifts Removed',val:'1',color:'text-red-600'},
+    ],
+    events:[
+      {time:'3:15 PM',action:'remove',actor:'wfm.scheduler@intuit.com', field:'Shift',         before:'9:00–5:30 PM',after:'—',          reason:'Unplanned absence — sick leave reported'},
+      {time:'8:50 AM',action:'edit',  actor:'wfm.scheduler@intuit.com', field:'Shift Start',   before:'8:30 AM',     after:'9:00 AM',    reason:'Adjusted for commute accommodation'},
+      {time:'7:30 AM',action:'edit',  actor:'wfm.auto-assign',          field:'Queue Assignment',before:'SBG_US_OL', after:'CTG_US_DE',  reason:'Dynamic queue rebalancing'},
+    ]
+  },
+  priya: {
+    name:'Priya K.', emp:'EMP-10554', partner:'JDA', shift:'7:00 AM – 3:30 PM',
+    shiftLeft:'10%', shiftWidth:'52%',
+    kpis:[
+      {label:'Total Changes',val:'4',color:'text-slate-800'},
+      {label:'Shifts Added',val:'2',color:'text-green-600'},
+      {label:'Shifts Edited',val:'2',color:'text-blue-600'},
+      {label:'Shifts Removed',val:'0',color:'text-red-600'},
+    ],
+    events:[
+      {time:'2:05 PM',action:'add',  actor:'wfm.scheduler@intuit.com', field:'Overtime Block',  before:'—',         after:'3:30–4:30 PM',reason:'Extended peak demand'},
+      {time:'11:10 AM',action:'edit',actor:'supervisor.patel@jda.com',  field:'Lunch Break',    before:'12:30 PM',  after:'12:00 PM',    reason:'Staggered breaks per WG policy'},
+      {time:'9:00 AM', action:'edit',actor:'wfm.auto-assign',           field:'Tier',           before:'Tier 1',    after:'Tier 2',      reason:'Certified T2 following qualification'},
+      {time:'6:45 AM', action:'add', actor:'wfm.scheduler@intuit.com',  field:'Pre-shift Wrap', before:'—',         after:'6:45–7:00 AM',reason:'Onboarding checklist requirement'},
+    ]
+  },
+  carlos: {
+    name:'Carlos R.', emp:'EMP-10228', partner:'MAGNIT', shift:'10:00 AM – 6:30 PM',
+    shiftLeft:'40%', shiftWidth:'52%',
+    kpis:[
+      {label:'Total Changes',val:'2',color:'text-slate-800'},
+      {label:'Shifts Added',val:'0',color:'text-green-600'},
+      {label:'Shifts Edited',val:'2',color:'text-blue-600'},
+      {label:'Shifts Removed',val:'0',color:'text-red-600'},
+    ],
+    events:[
+      {time:'12:30 PM',action:'edit',actor:'wfm.scheduler@intuit.com', field:'Shift End Time',  before:'7:00 PM',after:'6:30 PM',reason:'Schedule compressed; REQ dropped'},
+      {time:'9:45 AM', action:'edit',actor:'wfm.auto-assign',          field:'Queue Assignment',before:'CTG_US_SE',after:'CTG_US_DE',reason:'Auto-rebalance'},
+    ]
+  }
+};
+
+function buildExpertAudit() {
+  const expertKey = document.getElementById('expert-select').value;
+  const d = expertAuditData[expertKey];
+  // KPIs
+  const kpiEl = document.getElementById('expert-audit-kpis');
+  kpiEl.innerHTML = d.kpis.map(k=>`<div class="kpi-card text-center"><div class="text-3xl font-bold ${k.color}">${k.val}</div><div class="text-xs text-slate-500 mt-1">${k.label}</div></div>`).join('');
+  // Shift bar
+  document.getElementById('expert-shift-bar-title').textContent = `Scheduled Shift — ${d.name} · Apr 22, 2025`;
+  const bar = document.getElementById('expert-shift-bar');
+  bar.style.left = d.shiftLeft; bar.style.width = d.shiftWidth;
+  bar.textContent = d.shift;
+  // Timeline
+  const tl = document.getElementById('expert-audit-timeline');
+  const actionMeta = {
+    add:    {dot:'audit-dot-add',    badge:'audit-action-add',    icon:'＋', label:'Added'},
+    edit:   {dot:'audit-dot-edit',   badge:'audit-action-edit',   icon:'✎',  label:'Edited'},
+    remove: {dot:'audit-dot-remove', badge:'audit-action-remove', icon:'✕',  label:'Removed'},
+  };
+  tl.innerHTML = '<div class="audit-timeline-line"></div>' + d.events.map((ev,i)=>{
+    const m = actionMeta[ev.action];
+    return `<div class="relative mb-6 last:mb-0">
+      <div class="absolute -left-[44px] w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm z-10 ${m.dot}" style="top:0px">${m.icon}</div>
+      <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+        <div class="flex items-start justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs px-2 py-0.5 rounded font-semibold ${m.badge}">${m.label}</span>
+            <span class="font-semibold text-slate-800 text-sm">${ev.field}</span>
+          </div>
+          <span class="text-xs text-slate-400 whitespace-nowrap ml-4">${ev.time}</span>
+        </div>
+        <div class="flex items-center gap-2 text-sm mb-2">
+          ${ev.before !== '—' ? `<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono text-xs">${ev.before}</span><span class="text-slate-400">→</span>` : ''}
+          ${ev.after !== '—' ? `<span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono text-xs font-semibold">${ev.after}</span>` : `<span class="bg-red-50 text-red-600 px-2 py-0.5 rounded text-xs">Removed</span>`}
+        </div>
+        <div class="text-xs text-slate-500 flex items-center gap-3">
+          <span>👤 <strong class="text-slate-600">${ev.actor}</strong></span>
+          <span class="text-slate-300">|</span>
+          <span>📝 ${ev.reason}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// WG SCHEDULE AUDIT
+// ============================================================
+const wgExpertRows = [
+  {name:'Sarah M.',    emp:'EMP-10482', partner:'INTUIT', add:3, edit:8, remove:1, editor:'wfm.scheduler'},
+  {name:'Marcus W.',   emp:'EMP-10119', partner:'INTUIT', add:2, edit:9, remove:2, editor:'wfm.scheduler'},
+  {name:'Priya K.',    emp:'EMP-10554', partner:'JDA',    add:4, edit:6, remove:0, editor:'supervisor.patel'},
+  {name:'Aisha B.',    emp:'EMP-10387', partner:'INTUIT', add:1, edit:7, remove:3, editor:'wfm.auto-assign'},
+  {name:'James T.',    emp:'EMP-10391', partner:'INTUIT', add:0, edit:5, remove:4, editor:'wfm.scheduler'},
+  {name:'Lin C.',      emp:'EMP-10601', partner:'JDA',    add:2, edit:5, remove:1, editor:'wfm.auto-assign'},
+  {name:'Carlos R.',   emp:'EMP-10228', partner:'MAGNIT', add:1, edit:4, remove:2, editor:'wfm.scheduler'},
+  {name:'Deepa N.',    emp:'EMP-10445', partner:'MAGNIT', add:2, edit:4, remove:1, editor:'supervisor.jones'},
+  {name:'Tyler H.',    emp:'EMP-10312', partner:'INTUIT', add:0, edit:5, remove:2, editor:'wfm.scheduler'},
+  {name:'Fatima O.',   emp:'EMP-10533', partner:'JDA',    add:1, edit:3, remove:2, editor:'wfm.auto-assign'},
+];
+
+function buildWGAudit() {
+  const tb = document.getElementById('wg-audit-experts-table');
+  let html = '';
+  wgExpertRows.forEach((r,i) => {
+    const total = r.add+r.edit+r.remove;
+    const maxT = 20; // for bar scaling
+    const addW = Math.round(r.add/maxT*100), editW = Math.round(r.edit/maxT*100), remW = Math.round(r.remove/maxT*100);
+    const evens = i%2===0?'bg-white':'bg-slate-50/40';
+    html += `<tr class="${evens}">
+      <td class="px-4 py-3"><div class="font-semibold text-slate-700 text-sm">${r.name}</div><div class="text-xs text-slate-400">${r.emp}</div></td>
+      <td class="px-4 py-3 text-sm text-slate-600">${r.partner}</td>
+      <td class="px-4 py-3 text-right font-semibold text-green-600">${r.add}</td>
+      <td class="px-4 py-3 text-right font-semibold text-blue-600">${r.edit}</td>
+      <td class="px-4 py-3 text-right font-semibold text-red-600">${r.remove}</td>
+      <td class="px-4 py-3 text-right font-bold text-slate-800">${total}</td>
+      <td class="px-4 py-3" style="min-width:120px">
+        <div class="flex gap-0.5 h-2 rounded overflow-hidden w-full">
+          ${r.add>0?`<div class="wg-audit-bar" style="width:${addW}%;background:#16a34a"></div>`:''}
+          ${r.edit>0?`<div class="wg-audit-bar" style="width:${editW}%;background:#2563eb"></div>`:''}
+          ${r.remove>0?`<div class="wg-audit-bar" style="width:${remW}%;background:#dc2626"></div>`:''}
+        </div>
+      </td>
+      <td class="px-4 py-3 text-xs text-slate-500">${r.editor}</td>
+    </tr>`;
+  });
+  tb.innerHTML = html;
+  buildWGAuditHeatmap();
+}
+
+function buildWGAuditHeatmap() {
+  const el = document.getElementById('wg-audit-heatmap');
+  if (!el) return;
+  // sample change intensity per interval
+  const intensity = [2,3,4,5,9,14,18,20,22,21,19,17,16,15,12,10,9,8,6,5,4,3,2,2,1,1,1,1,0,0];
+  const max = Math.max(...intensity);
+  el.innerHTML = intervals.map((intv,i) => {
+    const pct = intensity[i]/max;
+    const alpha = (0.05 + pct*0.9).toFixed(2);
+    return `<div title="${intv}: ${intensity[i]} changes" class="rounded cursor-default" style="width:28px;height:32px;background:rgba(37,99,235,${alpha});flex-shrink:0" ></div>`;
+  }).join('');
+}
+
+// ============================================================
+// STAFFING ADJ TABLE
+// ============================================================
+const planScheduleRows = [
+  {time:'6:30-7:00',  totalHC:19, adjRule:'3.5 hrs', calc:26.505, sync:27,  pctDiff:'1.83%'},
+  {time:'7:00-7:30',  totalHC:24, adjRule:'3.5 hrs', calc:33.48,  sync:36,  pctDiff:'7.00%'},
+  {time:'7:30-8:00',  totalHC:29, adjRule:'3.5 hrs', calc:40.455, sync:41,  pctDiff:'1.33%'},
+  {time:'8:00-8:30',  totalHC:33, adjRule:'3.5 hrs', calc:46.035, sync:50,  pctDiff:'7.93%'},
+  {time:'8:30-9:00',  totalHC:36, adjRule:'3.5 hrs', calc:50.22,  sync:54,  pctDiff:'7.00%'},
+  {time:'9:00-9:30',  totalHC:38, adjRule:'3.5 hrs', calc:53.01,  sync:54,  pctDiff:'1.83%'},
+  {time:'9:30-10:00', totalHC:38, adjRule:'3.5 hrs', calc:53.01,  sync:54,  pctDiff:'1.83%'},
+  {time:'10:00-10:30',totalHC:40, adjRule:'3.5 hrs', calc:55.8,   sync:59,  pctDiff:'5.42%'},
+  {time:'10:30-11:00',totalHC:40, adjRule:'3.5 hrs', calc:55.8,   sync:59,  pctDiff:'5.42%'},
+  {time:'11:00-11:30',totalHC:41, adjRule:'3.5 hrs', calc:57.195, sync:59,  pctDiff:'3.06%'},
+];
+function buildStaffingAdjTable(){
+  const tb=document.getElementById('staffingAdjTable');if(!tb)return;
+  tb.innerHTML=planScheduleRows.map((row,i)=>{
+    const e=i%2===0?'bg-white':'bg-slate-50/40';const h=parseFloat(row.pctDiff)>6;
+    return `<tr class="${e}"><td class="px-3 py-2 text-slate-600 font-mono text-xs">${row.time}</td><td class="px-3 py-2 text-right">${row.totalHC}</td><td class="px-3 py-2 text-right text-slate-600">${row.adjRule}</td><td class="px-3 py-2 text-right font-mono">${row.calc}</td><td class="px-3 py-2 text-right font-mono font-semibold">${row.sync}</td><td class="px-3 py-2 text-right ${h?'text-amber-700 font-semibold':'text-slate-500'}">${row.pctDiff}</td></tr>`;
+  }).join('');
+}
+
+// ============================================================
+// WATERFALL
+// ============================================================
+const waterfallStages=[
+  {label:'Baseline Adj Productive',hc:468,color:'#3b82f6',note:'Risk Tolerance 12.5% applied'},
+  {label:'Reallocated Hours',hc:454,color:'#6366f1',note:'Supply Soft Inputs -3% (10% setting)'},
+  {label:'Bounded Hours',hc:454,color:'#8b5cf6',note:'Min/Max HC not binding'},
+  {label:'Total Staffing Hours',hc:469,color:'#ec4899',note:'Shrinkage 28% applied (÷ 0.72)'},
+  {label:'Final Requirement',hc:337,color:'#10b981',note:'Throttling -28% applied'},
+];
+function buildWaterfallBars(){
+  const tb=document.getElementById('waterfallBars');if(!tb)return;
+  const mx=Math.max(...waterfallStages.map(s=>s.hc));
+  tb.innerHTML=waterfallStages.map((s,i)=>`<div>
+    <div class="flex items-center justify-between text-xs mb-1"><span class="text-slate-600 font-medium">${i+1}. ${s.label}</span><span class="font-bold text-slate-800">${s.hc} HC</span></div>
+    <div class="bg-slate-100 rounded-full h-7 overflow-hidden"><div class="h-full rounded-full flex items-center px-3 text-white text-xs font-semibold waterfall-bar" style="width:${(s.hc/mx*100).toFixed(1)}%;background:${s.color};">${s.hc}</div></div>
+    <div class="text-xs text-slate-400 mt-0.5">${s.note}</div>
+  </div>`).join('');
+}
+
+// ============================================================
+// NAV
+// ============================================================
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const el=document.getElementById('view-'+id);
+  if(el) el.classList.add('active');
+  const crumbs={'ai-engine':'AI Observability Engine','alerts':'Proactive Alerts','act-req-sch':'Actual vs REQ vs SCH','idp-views':'IDP Views','occ-util-shr':'OCC / UTIL / SHR','pop-comparison':'Plan over Plan Comparison','req-versions':'Requirements Versions','staffing-adj':'Staffing Adjustments','expert-audit':'Expert Schedule Audit','wg-audit':'WG Schedule Audit'};
+  document.getElementById('breadcrumb').textContent=crumbs[id]||id;
+  document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')?.includes(`'${id}'`))n.classList.add('active');});
+  if(id==='act-req-sch')refreshARSView();
+  else if(id==='occ-util-shr')renderOccTable();
+  else if(id==='pop-comparison'){buildPopTable();setTimeout(initPopChart,50);}
+  else if(id==='req-versions'){buildWaterfallBars();setTimeout(()=>{initWaterfallChart();},50);}
+  else if(id==='expert-audit'){buildExpertAudit();}
+  else if(id==='wg-audit'){buildWGAudit();setTimeout(initWGCharts,50);}
+  else setTimeout(initCharts,50);
+}
+
+// ============================================================
+// ARS
+// ============================================================
+function setGranularity(g){currentGranularity=g;['interval','day','week','month'].forEach(x=>document.getElementById('toggle-'+x).classList.toggle('active',x===g));refreshARSView();}
+function togglePartnerBreakdown(){showPartners=!showPartners;const b=document.getElementById('partner-toggle-btn');b.textContent=showPartners?'On':'Off';b.classList.toggle('active',showPartners);refreshARSView();}
+function refreshARSView(){
+  buildARSTable();destroyChart('actReqSch');
+  const ctx=document.getElementById('actReqSchChart');if(!ctx)return;
+  let lbl,req,sch,act,gl;
+  if(currentGranularity==='interval'){lbl=intervals;req=requiredHC;sch=scheduledHC;act=actualHC;gl='30-min intervals';}
+  else if(currentGranularity==='day'){lbl=dayLabels;req=dayRequired;sch=dayScheduled;act=dayActual;gl='Daily';}
+  else if(currentGranularity==='week'){lbl=weekLabels;req=weekRequired;sch=weekScheduled;act=weekActual;gl='Weekly';}
+  else{lbl=monthLabels;req=monthRequired;sch=monthScheduled;act=monthActual;gl='Monthly';}
+  document.getElementById('ars-chart-label').textContent=`CTG_US_DE_FS_PROF1_EN · 3/1/2025 · ${gl}`;
+  document.getElementById('col-period-header').textContent={interval:'Interval',day:'Date',week:'Week',month:'Month'}[currentGranularity];
+  document.getElementById('ars-table-label').textContent=`${gl} Detail — Gap Analysis`;
+  charts['actReqSch']=new Chart(ctx,{type:'line',data:{labels:lbl,datasets:[
+    {label:'Required HC',data:req,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,0.06)',tension:0.3,borderWidth:2,pointRadius:0},
+    {label:'Scheduled HC',data:sch,borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.06)',tension:0.3,borderWidth:2,borderDash:[4,2],pointRadius:0},
+    {label:'Actual HC',data:act,borderColor:'#f59e0b',tension:0.3,borderWidth:2,pointRadius:0,fill:false},
+  ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:11}}}},scales:{x:{ticks:{font:{size:10},maxTicksLimit:16}},y:{ticks:{font:{size:10}},title:{display:true,text:'Headcount',font:{size:10}}}}}});
+}
+function buildARSTable(){
+  const tb=document.getElementById('arsTable');if(!tb)return;
+  let lbl,req,sch,act;
+  if(currentGranularity==='interval'){lbl=intervals;req=requiredHC;sch=scheduledHC;act=actualHC;}
+  else if(currentGranularity==='day'){lbl=dayLabels;req=dayRequired;sch=dayScheduled;act=dayActual;}
+  else if(currentGranularity==='week'){lbl=weekLabels;req=weekRequired;sch=weekScheduled;act=weekActual;}
+  else{lbl=monthLabels;req=monthRequired;sch=monthScheduled;act=monthActual;}
+  let html='';
+  lbl.forEach((label,i)=>{
+    const r=req[i],s=sch[i],a=act[i];
+    const sd=(s/r*100)-100;
+    let sfc,sfl;
+    if(sd>2){sfc='sch-flag-over';sfl=`⬆ +${sd.toFixed(1)}% Over`;}
+    else if(sd<-2){sfc='sch-flag-under';sfl=`⬇ ${sd.toFixed(1)}% Under`;}
+    else{sfc='sch-flag-ok';sfl=`✓ ${sd>=0?'+':''}${sd.toFixed(1)}%`;}
+    const avs=(a/s*100).toFixed(1);
+    let ac='gap-green',al='✓ OK';
+    if(a/s<0.90){ac='gap-red';al='🔴 Critical';}else if(a/s<0.95){ac='gap-yellow';al='⚠️ Gap';}
+    const e=i%2===0?'bg-white':'bg-slate-50/50';const rid=`row-${i}`;
+    html+=`<tr class="${e}" id="${rid}"><td class="px-4 py-2 text-slate-600 font-medium">${showPartners?`<span class="expand-btn" onclick="togglePartnerRows('${rid}')">▶</span>`:''} ${label}</td><td class="px-4 py-2 text-right font-mono">${r.toLocaleString()}</td><td class="px-4 py-2 text-right font-mono">${s.toLocaleString()}</td><td class="px-4 py-2 text-right font-mono">${a.toLocaleString()}</td><td class="px-4 py-2 text-right text-xs">${(s/r*100).toFixed(1)}%</td><td class="px-4 py-2 text-center"><span class="text-xs px-2 py-0.5 rounded ${sfc}">${sfl}</span></td><td class="px-4 py-2 text-right text-xs">${avs}%</td><td class="px-4 py-2 text-center"><span class="text-xs px-2 py-0.5 rounded ${ac}">${al}</span></td></tr>`;
+    if(showPartners){['INTUIT','JDA','MAGNIT'].forEach((p,pi)=>{const rat=[0.50,0.30,0.20][pi];const pr=Math.round(r*rat),ps=Math.round(s*rat),pa=Math.round(a*rat);const pd=(ps/pr*100)-100;let psc='sch-flag-ok',psl=`✓ ${pd>=0?'+':''}${pd.toFixed(1)}%`;if(pd>2){psc='sch-flag-over';psl=`⬆ +${pd.toFixed(1)}%`;}else if(pd<-2){psc='sch-flag-under';psl=`⬇ ${pd.toFixed(1)}%`;}let pac='gap-green',pal='✓ OK';if(pa/ps<0.90){pac='gap-red';pal='🔴 Critical';}else if(pa/ps<0.95){pac='gap-yellow';pal='⚠️ Gap';}
+      html+=`<tr class="partner-sub-${rid}" style="display:none;background:#f8fafc;"><td class="px-4 py-1 pl-10 text-slate-400 italic text-xs">↳ ${p}</td><td class="px-4 py-1 text-right font-mono text-xs text-slate-500">${pr.toLocaleString()}</td><td class="px-4 py-1 text-right font-mono text-xs text-slate-500">${ps.toLocaleString()}</td><td class="px-4 py-1 text-right font-mono text-xs text-slate-500">${pa.toLocaleString()}</td><td class="px-4 py-1 text-right text-xs text-slate-400">${(ps/pr*100).toFixed(1)}%</td><td class="px-4 py-1 text-center"><span class="text-xs px-2 py-0.5 rounded ${psc}">${psl}</span></td><td class="px-4 py-1 text-right text-xs text-slate-400">${(pa/ps*100).toFixed(1)}%</td><td class="px-4 py-1 text-center"><span class="text-xs px-2 py-0.5 rounded ${pac}">${pal}</span></td></tr>`;
+    });}
+  });
+  tb.innerHTML=html;
+}
+function togglePartnerRows(rid){const subs=document.querySelectorAll(`.partner-sub-${rid}`);const btn=document.querySelector(`#${rid} .expand-btn`);const vis=subs[0]?.style.display!=='none';subs.forEach(r=>r.style.display=vis?'none':'table-row');if(btn)btn.textContent=vis?'▶':'▼';}
+
+// ============================================================
+// AI MOCK
+// ============================================================
+const aiResponses={
+  'staffing readiness':{text:`<strong>Staffing Readiness</strong><br>Avg coverage <strong>94.2%</strong>. 3 intervals below threshold:<br><ul class="mt-2 space-y-1 text-sm text-slate-600"><li>🔴 9:00–9:30: −21 HC</li><li>🔴 8:00–8:30: −15 HC</li><li>🟡 8:30–9:00: −19 HC</li></ul>`,nav:'act-req-sch'},
+  'plan over plan':{text:`<strong>April Lock vs April Flash</strong><br>1 changed input: <strong>Supply Soft Inputs 10% → 15%</strong>. Projects +8.4% increase in requirements.`,nav:'pop-comparison'},
+  'gaps':{text:`<strong>Largest Gaps Today</strong><br><ul class="mt-2 text-sm text-slate-600 space-y-1"><li>🔴 9:00–9:30: −21 HC</li><li>🟡 8:30–9:00: −19 HC</li><li>🔴 8:00–8:30: −15 HC</li></ul>`,nav:'act-req-sch'},
+  'idp':{text:`<strong>IDP View</strong><br>Actual: <strong>278</strong> | Required: <strong>299</strong> | Sched: <strong>305</strong><br>Occupancy: 91.8% · Shrinkage: 28.0% · Coverage: 94.2%`,nav:'idp-views'},
+};
+function submitPrompt(text){
+  if(!text?.trim())return;
+  document.getElementById('ai-input').value='';document.getElementById('suggested-prompts').style.display='none';
+  const chat=document.getElementById('chat-messages');
+  chat.innerHTML+=`<div class="flex justify-end"><div class="ai-bubble-user text-sm">${text}</div></div>`;
+  const tid='typing-'+Date.now();
+  chat.innerHTML+=`<div id="${tid}" class="ai-bubble-ai text-sm text-slate-400"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>`;
+  chat.scrollTop=chat.scrollHeight;
+  setTimeout(()=>{
+    document.getElementById(tid)?.remove();
+    const t=text.toLowerCase();let r=null;
+    if(t.includes('staffing readiness')||(t.includes('staffing')&&t.includes('readiness')))r=aiResponses['staffing readiness'];
+    else if(t.includes('plan over')||t.includes('lock')||t.includes('flash'))r=aiResponses['plan over plan'];
+    else if(t.includes('gap')||t.includes('largest'))r=aiResponses['gaps'];
+    else if(t.includes('idp'))r=aiResponses['idp'];
+    if(r){chat.innerHTML+=`<div class="ai-bubble-ai text-sm">${r.text}<div class="mt-3"><button onclick="showView('${r.nav}')" class="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded px-3 py-1.5 hover:bg-blue-100">View full dashboard →</button></div></div>`;}
+    else{chat.innerHTML+=`<div class="ai-bubble-ai text-sm text-slate-600">I don't have a pre-built response for that query. Navigate using the sidebar.</div>`;}
+    chat.scrollTop=chat.scrollHeight;
+  },900);
+}
+
+// ============================================================
+// CHARTS
+// ============================================================
+let charts={};
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+
+function initPopChart(){
+  destroyChart('popGap');const ctx=document.getElementById('popGapChart');if(!ctx)return;
+  const gd=requiredHC.map((h,i)=>scheduledHC[i]-h);
+  charts['popGap']=new Chart(ctx,{type:'bar',data:{labels:intervals,datasets:[{label:'Gap',data:gd,backgroundColor:gd.map(v=>v>0?'#dc2626':v===0?'#16a34a':'#eab308'),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10},maxTicksLimit:14}},y:{ticks:{font:{size:10}},title:{display:true,text:'Sched − New Req HC',font:{size:10}}}}}});
+}
+
+function initWaterfallChart(){
+  destroyChart('waterfall');const ctx=document.getElementById('waterfallChart');if(!ctx)return;
+  const s1=requiredHC.map(h=>Math.round(h*1.39));
+  charts['waterfall']=new Chart(ctx,{type:'line',data:{labels:intervals,datasets:[
+    {label:'Baseline Adj Productive',data:s1,borderColor:'#3b82f6',tension:0.3,borderWidth:1.5,pointRadius:0},
+    {label:'Reallocated',data:s1.map(h=>Math.round(h*0.97)),borderColor:'#6366f1',tension:0.3,borderWidth:1.5,borderDash:[3,2],pointRadius:0},
+    {label:'Total Staffing',data:s1,borderColor:'#ec4899',tension:0.3,borderWidth:1.5,borderDash:[6,2],pointRadius:0},
+    {label:'Final Requirement',data:requiredHC,borderColor:'#10b981',tension:0.3,borderWidth:2,pointRadius:0},
+  ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:10}}}},scales:{x:{ticks:{font:{size:10},maxTicksLimit:14}},y:{ticks:{font:{size:10}}}}}});
+}
+
+function initWGCharts(){
+  destroyChart('wgDaily');const ctx1=document.getElementById('wgAuditDailyChart');
+  if(ctx1){
+    const days=['Apr 14','Apr 15','Apr 16','Apr 17','Apr 18','Apr 19','Apr 20','Apr 21','Apr 22'];
+    charts['wgDaily']=new Chart(ctx1,{type:'bar',data:{labels:days,datasets:[
+      {label:'Added',  data:[4,3,5,6,4,3,2,5,6],  backgroundColor:'rgba(22,163,74,0.7)'},
+      {label:'Edited', data:[9,11,10,12,9,8,7,10,10],backgroundColor:'rgba(37,99,235,0.7)'},
+      {label:'Removed',data:[2,3,2,4,3,2,1,3,3], backgroundColor:'rgba(220,38,38,0.7)'},
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:11}}}},scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10}}}}}});
+  }
+  destroyChart('wgDonut');const ctx2=document.getElementById('wgAuditDonutChart');
+  if(ctx2){
+    charts['wgDonut']=new Chart(ctx2,{type:'doughnut',data:{labels:['Edited (58%)','Added (26%)','Removed (16%)'],datasets:[{data:[86,38,23],backgroundColor:['#2563eb','#16a34a','#dc2626'],borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:11}}}}}});
+  }
+}
+
+function initCharts(){
+  destroyChart('idp');const ctx2=document.getElementById('idpChart');
+  if(ctx2){charts['idp']=new Chart(ctx2,{type:'bar',data:{labels:intervals.slice(0,24),datasets:[
+    {label:'Required HC',data:requiredHC.slice(0,24),backgroundColor:'rgba(37,99,235,0.15)',borderColor:'#2563eb',borderWidth:1},
+    {label:'Scheduled HC',data:scheduledHC.slice(0,24),backgroundColor:'rgba(16,185,129,0.15)',borderColor:'#10b981',borderWidth:1},
+    {label:'Actual HC',data:actualHC.slice(0,24),backgroundColor:'rgba(245,158,11,0.3)',borderColor:'#d97706',borderWidth:1},
+  ]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:11}}}},scales:{x:{ticks:{font:{size:10},maxTicksLimit:14}},y:{ticks:{font:{size:10}}}}}});}
+}
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded',()=>{
+  refreshARSView();buildStaffingAdjTable();buildWaterfallBars();renderOccTable();buildExpertAudit();buildWGAudit();initCharts();
+});
+</script>
+</body>
+</html>
